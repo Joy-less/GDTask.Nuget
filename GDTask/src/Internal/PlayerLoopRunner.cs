@@ -1,6 +1,6 @@
-﻿
-using Godot;
+﻿using Godot;
 using System;
+using System.Threading;
 
 namespace GodotTask.Internal
 {
@@ -8,8 +8,13 @@ namespace GodotTask.Internal
     {
         private const int InitialSize = 16;
 
-        private readonly object runningAndQueueLock = new object();
-        private readonly object arrayLock = new object();
+#if NET9_0_OR_GREATER
+        private readonly Lock runningAndQueueLock = new();
+        private readonly Lock arrayLock = new();
+#else
+        private readonly object runningAndQueueLock = new();
+        private readonly object arrayLock = new();
+#endif
         private readonly Action<Exception> unhandledExceptionCallback= ex => GD.PrintErr(ex);
 
         private int tail = 0;

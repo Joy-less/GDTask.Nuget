@@ -324,7 +324,11 @@ namespace GodotTask.Internal
 
     internal sealed class SingleAssignmentDisposable : IDisposable
     {
-        private readonly object gate = new object();
+#if NET9_0_OR_GREATER
+        private readonly Lock gate = new();
+#else
+        private readonly object gate = new();
+#endif
         private IDisposable current;
         private bool disposed;
 
@@ -379,7 +383,11 @@ namespace GodotTask.Internal
 
     internal sealed class AsyncSubject<T> : IObservable<T>, IObserver<T>
     {
-        private readonly object observerLock = new object();
+#if NET9_0_OR_GREATER
+        private readonly Lock observerLock = new();
+#else
+        private readonly object observerLock = new();
+#endif
 
         private T lastValue;
         private bool hasValue;
@@ -535,7 +543,11 @@ namespace GodotTask.Internal
 
         private class Subscription : IDisposable
         {
-            private readonly object gate = new object();
+#if NET9_0_OR_GREATER
+        private readonly Lock gate = new();
+#else
+        private readonly object gate = new();
+#endif
             private AsyncSubject<T> parent;
             private IObserver<T> unsubscribeTarget;
 
