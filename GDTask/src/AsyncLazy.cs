@@ -35,14 +35,22 @@ namespace GodotTask
         private readonly GDTaskCompletionSource completionSource;
         private GDTask.Awaiter awaiter;
 
+#if NET9_0_OR_GREATER
+        private readonly Lock syncLock;
+#else
         private readonly object syncLock;
+#endif
         private bool initialized;
 
         public AsyncLazy(Func<GDTask> taskFactory)
         {
             this.taskFactory = taskFactory;
             completionSource = new GDTaskCompletionSource();
+#if NET9_0_OR_GREATER
+            syncLock = new Lock();
+#else
             syncLock = new object();
+#endif
             initialized = false;
         }
 
@@ -152,14 +160,22 @@ namespace GodotTask
         private readonly GDTaskCompletionSource<T> completionSource;
         private GDTask<T>.Awaiter awaiter;
 
+#if NET9_0_OR_GREATER
+        private readonly Lock syncLock;
+#else
         private readonly object syncLock;
+#endif
         private bool initialized;
 
         public AsyncLazy(Func<GDTask<T>> taskFactory)
         {
             this.taskFactory = taskFactory;
             completionSource = new GDTaskCompletionSource<T>();
+#if NET9_0_OR_GREATER
+            syncLock = new Lock();
+#else
             syncLock = new object();
+#endif
             initialized = false;
         }
 
