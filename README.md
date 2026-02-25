@@ -22,6 +22,7 @@
   - [GDTask Under the hood](#gdtask-under-the-hood)
 - [Installation via Nuget](#installation-via-nuget)
 - [Basic API usage](#basic-api-usage)
+- [Extended Feature Packages](#extended-feature-packages)
 - [Task Profiling](#task-profiling)
 - [Compare with Standard .Net Task API](#compare-with-standard-net-task-api)
 
@@ -175,6 +176,42 @@ public async GDTask ApiUsage()
     await node.OnPredeleteAsync();
 }
 ```
+
+## Extended Feature Packages
+
+The following packages extend the functionality of GDTask; they are optional components for projects where applicable.
+
+---
+
+### [GDTask.GlobalCancellation](https://github.com/Joy-less/GDTask.Nuget.GlobalCancellation)
+
+[![GitHub Release](https://img.shields.io/github/v/release/Joy-less/GDTask.Nuget.GlobalCancellation)](https://github.com/Joy-less/GDTask.Nuget.GlobalCancellation/releases/latest) [![NuGet Version](https://img.shields.io/nuget/v/GDTask.GlobalCancellation)](https://www.nuget.org/packages/GDTask.GlobalCancellation) ![NuGet Downloads](https://img.shields.io/nuget/dt/GDTask.GlobalCancellation) [![Stars](https://img.shields.io/github/stars/Joy-less/GDTask.Nuget.GlobalCancellation?color=brightgreen)](https://github.com/Joy-less/GDTask.Nuget.GlobalCancellation/stargazers) [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Joy-less/GDTask.Nuget.GlobalCancellation/blob/main/LICENSE)
+
+Authored by: [@Joy-less](https://github.com/Joy-less)
+
+This package adds support for attaching a global cancellation token to GDTasks with the `AttachGlobalCancellation` extension method and cancelling it with the `GDTaskGlobalCancellationManager.Cancel` method. This is useful for cancelling certain tasks in bulk.
+
+Package: [GDTask.GlobalCancellation on NuGet](https://www.nuget.org/packages/GDTask.GlobalCancellation)
+
+
+Install:
+
+```bash
+dotnet add package GDTask.GlobalCancellation
+```
+
+Example usage:
+
+```csharp
+GDTask.Delay(TimeSpan.FromSeconds(3.0)).AttachGlobalCancellation();
+GDTask.Delay(TimeSpan.FromSeconds(2.0)).AttachGlobalCancellation();
+GDTask.Delay(TimeSpan.FromSeconds(5.0)).AttachGlobalCancellation();
+GDTask.Delay(TimeSpan.FromSeconds(1.0)).AttachGlobalCancellation();
+
+GDTaskGlobalCancellationManager.Cancel();
+```
+
+---
 
 ## Task Profiling
 
