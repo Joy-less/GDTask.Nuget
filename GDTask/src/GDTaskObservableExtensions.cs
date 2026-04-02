@@ -497,7 +497,7 @@ namespace GodotTask.Internal
                         }
                         else
                         {
-                            outObserver = new ListObserver<T>([current, observer]);
+                            outObserver = new ListObserver<T>(ImmutableArray.Create(current, observer));
                         }
                     }
 
