@@ -11,17 +11,12 @@ public partial class ApiUsage : Node
 	public override void _Ready()
 	{
 		base._Ready();
-		// TaskTracker.ShowTrackerWindow();
+		TaskTracker.ShowTrackerWindow();
 		ApiUsage_Method().Forget();
 	}
 
 	public static async GDTask ApiUsage_Method()
 	{
-		await GDTaskTest_Threading.GDTask_SwitchToThreadPool();
-		await GDTaskTest_Threading.GDTask_SwitchToMainThread_Process();
-		await GDTaskTest_Threading.GDTask_SwitchToMainThread_Process_Token();
-		await GDTaskTest_Threading.GDTask_SwitchToMainThread_CustomPlayerLoop();
-		
 		await GDTask.SwitchToMainThread();
 		
 		// Delay the execution after frame(s).
