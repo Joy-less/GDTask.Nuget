@@ -10,11 +10,20 @@ namespace GodotTask
     {
         /// <summary>
         /// Creates a task that will complete when any of the supplied tasks have completed.
+        /// The returned combinator task completes successfully with the first completed input representation,
+        /// even if that winning input is faulted or canceled.
         /// </summary>
         /// <returns>A task that represents the info for completed tasks.</returns>
         public static GDTask<(int winArgumentIndex, T1 result1, T2 result2)> WhenAny<T1, T2>(GDTask<T1> task1, GDTask<T2> task2)
         {
-            return new GDTask<(int winArgumentIndex, T1 result1, T2 result2)>(new WhenAnyPromise<T1, T2>(task1, task2), 0);
+            return Core(ObserveWhenAnyCompletion(task1), ObserveWhenAnyCompletion(task2));
+
+            static async GDTask<(int winArgumentIndex, T1 result1, T2 result2)> Core(GDTask<WhenAnyObserved<T1>> task1, GDTask<WhenAnyObserved<T2>> task2)
+            {
+                var (winArgumentIndex, result1, result2) =
+                    await new GDTask<(int winArgumentIndex, WhenAnyObserved<T1> result1, WhenAnyObserved<T2> result2)>(new WhenAnyPromise<WhenAnyObserved<T1>, WhenAnyObserved<T2>>(task1, task2), 0);
+                return (winArgumentIndex, GetWhenAnyObservedResult(result1), GetWhenAnyObservedResult(result2));
+            }
         }
 
         sealed class WhenAnyPromise<T1, T2> : IGDTaskSource<(int, T1 result1, T2 result2)>
@@ -135,7 +144,14 @@ namespace GodotTask
         /// <inheritdoc cref="WhenAny{T1,T2}"/>
         public static GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3)> WhenAny<T1, T2, T3>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3)
         {
-            return new GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3)>(new WhenAnyPromise<T1, T2, T3>(task1, task2, task3), 0);
+            return Core(ObserveWhenAnyCompletion(task1), ObserveWhenAnyCompletion(task2), ObserveWhenAnyCompletion(task3));
+
+            static async GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3)> Core(GDTask<WhenAnyObserved<T1>> task1, GDTask<WhenAnyObserved<T2>> task2, GDTask<WhenAnyObserved<T3>> task3)
+            {
+                var (winArgumentIndex, result1, result2, result3) =
+                    await new GDTask<(int winArgumentIndex, WhenAnyObserved<T1> result1, WhenAnyObserved<T2> result2, WhenAnyObserved<T3> result3)>(new WhenAnyPromise<WhenAnyObserved<T1>, WhenAnyObserved<T2>, WhenAnyObserved<T3>>(task1, task2, task3), 0);
+                return (winArgumentIndex, GetWhenAnyObservedResult(result1), GetWhenAnyObservedResult(result2), GetWhenAnyObservedResult(result3));
+            }
         }
 
         sealed class WhenAnyPromise<T1, T2, T3> : IGDTaskSource<(int, T1 result1, T2 result2, T3 result3)>
@@ -293,7 +309,14 @@ namespace GodotTask
         /// <inheritdoc cref="WhenAny{T1,T2}"/>
         public static GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4)> WhenAny<T1, T2, T3, T4>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4)
         {
-            return new GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4)>(new WhenAnyPromise<T1, T2, T3, T4>(task1, task2, task3, task4), 0);
+            return Core(ObserveWhenAnyCompletion(task1), ObserveWhenAnyCompletion(task2), ObserveWhenAnyCompletion(task3), ObserveWhenAnyCompletion(task4));
+
+            static async GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4)> Core(GDTask<WhenAnyObserved<T1>> task1, GDTask<WhenAnyObserved<T2>> task2, GDTask<WhenAnyObserved<T3>> task3, GDTask<WhenAnyObserved<T4>> task4)
+            {
+                var (winArgumentIndex, result1, result2, result3, result4) =
+                    await new GDTask<(int winArgumentIndex, WhenAnyObserved<T1> result1, WhenAnyObserved<T2> result2, WhenAnyObserved<T3> result3, WhenAnyObserved<T4> result4)>(new WhenAnyPromise<WhenAnyObserved<T1>, WhenAnyObserved<T2>, WhenAnyObserved<T3>, WhenAnyObserved<T4>>(task1, task2, task3, task4), 0);
+                return (winArgumentIndex, GetWhenAnyObservedResult(result1), GetWhenAnyObservedResult(result2), GetWhenAnyObservedResult(result3), GetWhenAnyObservedResult(result4));
+            }
         }
 
         sealed class WhenAnyPromise<T1, T2, T3, T4> : IGDTaskSource<(int, T1 result1, T2 result2, T3 result3, T4 result4)>
@@ -488,7 +511,14 @@ namespace GodotTask
         /// <inheritdoc cref="WhenAny{T1,T2}"/>
         public static GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5)> WhenAny<T1, T2, T3, T4, T5>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5)
         {
-            return new GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5)>(new WhenAnyPromise<T1, T2, T3, T4, T5>(task1, task2, task3, task4, task5), 0);
+            return Core(ObserveWhenAnyCompletion(task1), ObserveWhenAnyCompletion(task2), ObserveWhenAnyCompletion(task3), ObserveWhenAnyCompletion(task4), ObserveWhenAnyCompletion(task5));
+
+            static async GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5)> Core(GDTask<WhenAnyObserved<T1>> task1, GDTask<WhenAnyObserved<T2>> task2, GDTask<WhenAnyObserved<T3>> task3, GDTask<WhenAnyObserved<T4>> task4, GDTask<WhenAnyObserved<T5>> task5)
+            {
+                var (winArgumentIndex, result1, result2, result3, result4, result5) =
+                    await new GDTask<(int winArgumentIndex, WhenAnyObserved<T1> result1, WhenAnyObserved<T2> result2, WhenAnyObserved<T3> result3, WhenAnyObserved<T4> result4, WhenAnyObserved<T5> result5)>(new WhenAnyPromise<WhenAnyObserved<T1>, WhenAnyObserved<T2>, WhenAnyObserved<T3>, WhenAnyObserved<T4>, WhenAnyObserved<T5>>(task1, task2, task3, task4, task5), 0);
+                return (winArgumentIndex, GetWhenAnyObservedResult(result1), GetWhenAnyObservedResult(result2), GetWhenAnyObservedResult(result3), GetWhenAnyObservedResult(result4), GetWhenAnyObservedResult(result5));
+            }
         }
 
         sealed class WhenAnyPromise<T1, T2, T3, T4, T5> : IGDTaskSource<(int, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5)>
@@ -720,7 +750,14 @@ namespace GodotTask
         /// <inheritdoc cref="WhenAny{T1,T2}"/>
         public static GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6)> WhenAny<T1, T2, T3, T4, T5, T6>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6)
         {
-            return new GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6)>(new WhenAnyPromise<T1, T2, T3, T4, T5, T6>(task1, task2, task3, task4, task5, task6), 0);
+            return Core(ObserveWhenAnyCompletion(task1), ObserveWhenAnyCompletion(task2), ObserveWhenAnyCompletion(task3), ObserveWhenAnyCompletion(task4), ObserveWhenAnyCompletion(task5), ObserveWhenAnyCompletion(task6));
+
+            static async GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6)> Core(GDTask<WhenAnyObserved<T1>> task1, GDTask<WhenAnyObserved<T2>> task2, GDTask<WhenAnyObserved<T3>> task3, GDTask<WhenAnyObserved<T4>> task4, GDTask<WhenAnyObserved<T5>> task5, GDTask<WhenAnyObserved<T6>> task6)
+            {
+                var (winArgumentIndex, result1, result2, result3, result4, result5, result6) =
+                    await new GDTask<(int winArgumentIndex, WhenAnyObserved<T1> result1, WhenAnyObserved<T2> result2, WhenAnyObserved<T3> result3, WhenAnyObserved<T4> result4, WhenAnyObserved<T5> result5, WhenAnyObserved<T6> result6)>(new WhenAnyPromise<WhenAnyObserved<T1>, WhenAnyObserved<T2>, WhenAnyObserved<T3>, WhenAnyObserved<T4>, WhenAnyObserved<T5>, WhenAnyObserved<T6>>(task1, task2, task3, task4, task5, task6), 0);
+                return (winArgumentIndex, GetWhenAnyObservedResult(result1), GetWhenAnyObservedResult(result2), GetWhenAnyObservedResult(result3), GetWhenAnyObservedResult(result4), GetWhenAnyObservedResult(result5), GetWhenAnyObservedResult(result6));
+            }
         }
 
         sealed class WhenAnyPromise<T1, T2, T3, T4, T5, T6> : IGDTaskSource<(int, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6)>
@@ -989,7 +1026,14 @@ namespace GodotTask
         /// <inheritdoc cref="WhenAny{T1,T2}"/>
         public static GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7)> WhenAny<T1, T2, T3, T4, T5, T6, T7>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7)
         {
-            return new GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7)>(new WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7>(task1, task2, task3, task4, task5, task6, task7), 0);
+            return Core(ObserveWhenAnyCompletion(task1), ObserveWhenAnyCompletion(task2), ObserveWhenAnyCompletion(task3), ObserveWhenAnyCompletion(task4), ObserveWhenAnyCompletion(task5), ObserveWhenAnyCompletion(task6), ObserveWhenAnyCompletion(task7));
+
+            static async GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7)> Core(GDTask<WhenAnyObserved<T1>> task1, GDTask<WhenAnyObserved<T2>> task2, GDTask<WhenAnyObserved<T3>> task3, GDTask<WhenAnyObserved<T4>> task4, GDTask<WhenAnyObserved<T5>> task5, GDTask<WhenAnyObserved<T6>> task6, GDTask<WhenAnyObserved<T7>> task7)
+            {
+                var (winArgumentIndex, result1, result2, result3, result4, result5, result6, result7) =
+                    await new GDTask<(int winArgumentIndex, WhenAnyObserved<T1> result1, WhenAnyObserved<T2> result2, WhenAnyObserved<T3> result3, WhenAnyObserved<T4> result4, WhenAnyObserved<T5> result5, WhenAnyObserved<T6> result6, WhenAnyObserved<T7> result7)>(new WhenAnyPromise<WhenAnyObserved<T1>, WhenAnyObserved<T2>, WhenAnyObserved<T3>, WhenAnyObserved<T4>, WhenAnyObserved<T5>, WhenAnyObserved<T6>, WhenAnyObserved<T7>>(task1, task2, task3, task4, task5, task6, task7), 0);
+                return (winArgumentIndex, GetWhenAnyObservedResult(result1), GetWhenAnyObservedResult(result2), GetWhenAnyObservedResult(result3), GetWhenAnyObservedResult(result4), GetWhenAnyObservedResult(result5), GetWhenAnyObservedResult(result6), GetWhenAnyObservedResult(result7));
+            }
         }
 
         sealed class WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7> : IGDTaskSource<(int, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7)>
@@ -1295,7 +1339,14 @@ namespace GodotTask
         /// <inheritdoc cref="WhenAny{T1,T2}"/>
         public static GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8)> WhenAny<T1, T2, T3, T4, T5, T6, T7, T8>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8)
         {
-            return new GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8)>(new WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8>(task1, task2, task3, task4, task5, task6, task7, task8), 0);
+            return Core(ObserveWhenAnyCompletion(task1), ObserveWhenAnyCompletion(task2), ObserveWhenAnyCompletion(task3), ObserveWhenAnyCompletion(task4), ObserveWhenAnyCompletion(task5), ObserveWhenAnyCompletion(task6), ObserveWhenAnyCompletion(task7), ObserveWhenAnyCompletion(task8));
+
+            static async GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8)> Core(GDTask<WhenAnyObserved<T1>> task1, GDTask<WhenAnyObserved<T2>> task2, GDTask<WhenAnyObserved<T3>> task3, GDTask<WhenAnyObserved<T4>> task4, GDTask<WhenAnyObserved<T5>> task5, GDTask<WhenAnyObserved<T6>> task6, GDTask<WhenAnyObserved<T7>> task7, GDTask<WhenAnyObserved<T8>> task8)
+            {
+                var (winArgumentIndex, result1, result2, result3, result4, result5, result6, result7, result8) =
+                    await new GDTask<(int winArgumentIndex, WhenAnyObserved<T1> result1, WhenAnyObserved<T2> result2, WhenAnyObserved<T3> result3, WhenAnyObserved<T4> result4, WhenAnyObserved<T5> result5, WhenAnyObserved<T6> result6, WhenAnyObserved<T7> result7, WhenAnyObserved<T8> result8)>(new WhenAnyPromise<WhenAnyObserved<T1>, WhenAnyObserved<T2>, WhenAnyObserved<T3>, WhenAnyObserved<T4>, WhenAnyObserved<T5>, WhenAnyObserved<T6>, WhenAnyObserved<T7>, WhenAnyObserved<T8>>(task1, task2, task3, task4, task5, task6, task7, task8), 0);
+                return (winArgumentIndex, GetWhenAnyObservedResult(result1), GetWhenAnyObservedResult(result2), GetWhenAnyObservedResult(result3), GetWhenAnyObservedResult(result4), GetWhenAnyObservedResult(result5), GetWhenAnyObservedResult(result6), GetWhenAnyObservedResult(result7), GetWhenAnyObservedResult(result8));
+            }
         }
 
         sealed class WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8> : IGDTaskSource<(int, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8)>
@@ -1638,7 +1689,14 @@ namespace GodotTask
         /// <inheritdoc cref="WhenAny{T1,T2}"/>
         public static GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9)> WhenAny<T1, T2, T3, T4, T5, T6, T7, T8, T9>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9)
         {
-            return new GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9)>(new WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9>(task1, task2, task3, task4, task5, task6, task7, task8, task9), 0);
+            return Core(ObserveWhenAnyCompletion(task1), ObserveWhenAnyCompletion(task2), ObserveWhenAnyCompletion(task3), ObserveWhenAnyCompletion(task4), ObserveWhenAnyCompletion(task5), ObserveWhenAnyCompletion(task6), ObserveWhenAnyCompletion(task7), ObserveWhenAnyCompletion(task8), ObserveWhenAnyCompletion(task9));
+
+            static async GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9)> Core(GDTask<WhenAnyObserved<T1>> task1, GDTask<WhenAnyObserved<T2>> task2, GDTask<WhenAnyObserved<T3>> task3, GDTask<WhenAnyObserved<T4>> task4, GDTask<WhenAnyObserved<T5>> task5, GDTask<WhenAnyObserved<T6>> task6, GDTask<WhenAnyObserved<T7>> task7, GDTask<WhenAnyObserved<T8>> task8, GDTask<WhenAnyObserved<T9>> task9)
+            {
+                var (winArgumentIndex, result1, result2, result3, result4, result5, result6, result7, result8, result9) =
+                    await new GDTask<(int winArgumentIndex, WhenAnyObserved<T1> result1, WhenAnyObserved<T2> result2, WhenAnyObserved<T3> result3, WhenAnyObserved<T4> result4, WhenAnyObserved<T5> result5, WhenAnyObserved<T6> result6, WhenAnyObserved<T7> result7, WhenAnyObserved<T8> result8, WhenAnyObserved<T9> result9)>(new WhenAnyPromise<WhenAnyObserved<T1>, WhenAnyObserved<T2>, WhenAnyObserved<T3>, WhenAnyObserved<T4>, WhenAnyObserved<T5>, WhenAnyObserved<T6>, WhenAnyObserved<T7>, WhenAnyObserved<T8>, WhenAnyObserved<T9>>(task1, task2, task3, task4, task5, task6, task7, task8, task9), 0);
+                return (winArgumentIndex, GetWhenAnyObservedResult(result1), GetWhenAnyObservedResult(result2), GetWhenAnyObservedResult(result3), GetWhenAnyObservedResult(result4), GetWhenAnyObservedResult(result5), GetWhenAnyObservedResult(result6), GetWhenAnyObservedResult(result7), GetWhenAnyObservedResult(result8), GetWhenAnyObservedResult(result9));
+            }
         }
 
         sealed class WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9> : IGDTaskSource<(int, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9)>
@@ -2018,7 +2076,14 @@ namespace GodotTask
         /// <inheritdoc cref="WhenAny{T1,T2}"/>
         public static GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10)> WhenAny<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10)
         {
-            return new GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10)>(new WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10), 0);
+            return Core(ObserveWhenAnyCompletion(task1), ObserveWhenAnyCompletion(task2), ObserveWhenAnyCompletion(task3), ObserveWhenAnyCompletion(task4), ObserveWhenAnyCompletion(task5), ObserveWhenAnyCompletion(task6), ObserveWhenAnyCompletion(task7), ObserveWhenAnyCompletion(task8), ObserveWhenAnyCompletion(task9), ObserveWhenAnyCompletion(task10));
+
+            static async GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10)> Core(GDTask<WhenAnyObserved<T1>> task1, GDTask<WhenAnyObserved<T2>> task2, GDTask<WhenAnyObserved<T3>> task3, GDTask<WhenAnyObserved<T4>> task4, GDTask<WhenAnyObserved<T5>> task5, GDTask<WhenAnyObserved<T6>> task6, GDTask<WhenAnyObserved<T7>> task7, GDTask<WhenAnyObserved<T8>> task8, GDTask<WhenAnyObserved<T9>> task9, GDTask<WhenAnyObserved<T10>> task10)
+            {
+                var (winArgumentIndex, result1, result2, result3, result4, result5, result6, result7, result8, result9, result10) =
+                    await new GDTask<(int winArgumentIndex, WhenAnyObserved<T1> result1, WhenAnyObserved<T2> result2, WhenAnyObserved<T3> result3, WhenAnyObserved<T4> result4, WhenAnyObserved<T5> result5, WhenAnyObserved<T6> result6, WhenAnyObserved<T7> result7, WhenAnyObserved<T8> result8, WhenAnyObserved<T9> result9, WhenAnyObserved<T10> result10)>(new WhenAnyPromise<WhenAnyObserved<T1>, WhenAnyObserved<T2>, WhenAnyObserved<T3>, WhenAnyObserved<T4>, WhenAnyObserved<T5>, WhenAnyObserved<T6>, WhenAnyObserved<T7>, WhenAnyObserved<T8>, WhenAnyObserved<T9>, WhenAnyObserved<T10>>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10), 0);
+                return (winArgumentIndex, GetWhenAnyObservedResult(result1), GetWhenAnyObservedResult(result2), GetWhenAnyObservedResult(result3), GetWhenAnyObservedResult(result4), GetWhenAnyObservedResult(result5), GetWhenAnyObservedResult(result6), GetWhenAnyObservedResult(result7), GetWhenAnyObservedResult(result8), GetWhenAnyObservedResult(result9), GetWhenAnyObservedResult(result10));
+            }
         }
 
         sealed class WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> : IGDTaskSource<(int, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10)>
@@ -2435,7 +2500,14 @@ namespace GodotTask
         /// <inheritdoc cref="WhenAny{T1,T2}"/>
         public static GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11)> WhenAny<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11)
         {
-            return new GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11)>(new WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11), 0);
+            return Core(ObserveWhenAnyCompletion(task1), ObserveWhenAnyCompletion(task2), ObserveWhenAnyCompletion(task3), ObserveWhenAnyCompletion(task4), ObserveWhenAnyCompletion(task5), ObserveWhenAnyCompletion(task6), ObserveWhenAnyCompletion(task7), ObserveWhenAnyCompletion(task8), ObserveWhenAnyCompletion(task9), ObserveWhenAnyCompletion(task10), ObserveWhenAnyCompletion(task11));
+
+            static async GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11)> Core(GDTask<WhenAnyObserved<T1>> task1, GDTask<WhenAnyObserved<T2>> task2, GDTask<WhenAnyObserved<T3>> task3, GDTask<WhenAnyObserved<T4>> task4, GDTask<WhenAnyObserved<T5>> task5, GDTask<WhenAnyObserved<T6>> task6, GDTask<WhenAnyObserved<T7>> task7, GDTask<WhenAnyObserved<T8>> task8, GDTask<WhenAnyObserved<T9>> task9, GDTask<WhenAnyObserved<T10>> task10, GDTask<WhenAnyObserved<T11>> task11)
+            {
+                var (winArgumentIndex, result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11) =
+                    await new GDTask<(int winArgumentIndex, WhenAnyObserved<T1> result1, WhenAnyObserved<T2> result2, WhenAnyObserved<T3> result3, WhenAnyObserved<T4> result4, WhenAnyObserved<T5> result5, WhenAnyObserved<T6> result6, WhenAnyObserved<T7> result7, WhenAnyObserved<T8> result8, WhenAnyObserved<T9> result9, WhenAnyObserved<T10> result10, WhenAnyObserved<T11> result11)>(new WhenAnyPromise<WhenAnyObserved<T1>, WhenAnyObserved<T2>, WhenAnyObserved<T3>, WhenAnyObserved<T4>, WhenAnyObserved<T5>, WhenAnyObserved<T6>, WhenAnyObserved<T7>, WhenAnyObserved<T8>, WhenAnyObserved<T9>, WhenAnyObserved<T10>, WhenAnyObserved<T11>>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11), 0);
+                return (winArgumentIndex, GetWhenAnyObservedResult(result1), GetWhenAnyObservedResult(result2), GetWhenAnyObservedResult(result3), GetWhenAnyObservedResult(result4), GetWhenAnyObservedResult(result5), GetWhenAnyObservedResult(result6), GetWhenAnyObservedResult(result7), GetWhenAnyObservedResult(result8), GetWhenAnyObservedResult(result9), GetWhenAnyObservedResult(result10), GetWhenAnyObservedResult(result11));
+            }
         }
 
         sealed class WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> : IGDTaskSource<(int, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11)>
@@ -2889,7 +2961,14 @@ namespace GodotTask
         /// <inheritdoc cref="WhenAny{T1,T2}"/>
         public static GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12)> WhenAny<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11, GDTask<T12> task12)
         {
-            return new GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12)>(new WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11, task12), 0);
+            return Core(ObserveWhenAnyCompletion(task1), ObserveWhenAnyCompletion(task2), ObserveWhenAnyCompletion(task3), ObserveWhenAnyCompletion(task4), ObserveWhenAnyCompletion(task5), ObserveWhenAnyCompletion(task6), ObserveWhenAnyCompletion(task7), ObserveWhenAnyCompletion(task8), ObserveWhenAnyCompletion(task9), ObserveWhenAnyCompletion(task10), ObserveWhenAnyCompletion(task11), ObserveWhenAnyCompletion(task12));
+
+            static async GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12)> Core(GDTask<WhenAnyObserved<T1>> task1, GDTask<WhenAnyObserved<T2>> task2, GDTask<WhenAnyObserved<T3>> task3, GDTask<WhenAnyObserved<T4>> task4, GDTask<WhenAnyObserved<T5>> task5, GDTask<WhenAnyObserved<T6>> task6, GDTask<WhenAnyObserved<T7>> task7, GDTask<WhenAnyObserved<T8>> task8, GDTask<WhenAnyObserved<T9>> task9, GDTask<WhenAnyObserved<T10>> task10, GDTask<WhenAnyObserved<T11>> task11, GDTask<WhenAnyObserved<T12>> task12)
+            {
+                var (winArgumentIndex, result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result12) =
+                    await new GDTask<(int winArgumentIndex, WhenAnyObserved<T1> result1, WhenAnyObserved<T2> result2, WhenAnyObserved<T3> result3, WhenAnyObserved<T4> result4, WhenAnyObserved<T5> result5, WhenAnyObserved<T6> result6, WhenAnyObserved<T7> result7, WhenAnyObserved<T8> result8, WhenAnyObserved<T9> result9, WhenAnyObserved<T10> result10, WhenAnyObserved<T11> result11, WhenAnyObserved<T12> result12)>(new WhenAnyPromise<WhenAnyObserved<T1>, WhenAnyObserved<T2>, WhenAnyObserved<T3>, WhenAnyObserved<T4>, WhenAnyObserved<T5>, WhenAnyObserved<T6>, WhenAnyObserved<T7>, WhenAnyObserved<T8>, WhenAnyObserved<T9>, WhenAnyObserved<T10>, WhenAnyObserved<T11>, WhenAnyObserved<T12>>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11, task12), 0);
+                return (winArgumentIndex, GetWhenAnyObservedResult(result1), GetWhenAnyObservedResult(result2), GetWhenAnyObservedResult(result3), GetWhenAnyObservedResult(result4), GetWhenAnyObservedResult(result5), GetWhenAnyObservedResult(result6), GetWhenAnyObservedResult(result7), GetWhenAnyObservedResult(result8), GetWhenAnyObservedResult(result9), GetWhenAnyObservedResult(result10), GetWhenAnyObservedResult(result11), GetWhenAnyObservedResult(result12));
+            }
         }
 
         sealed class WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> : IGDTaskSource<(int, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12)>
@@ -3380,7 +3459,14 @@ namespace GodotTask
         /// <inheritdoc cref="WhenAny{T1,T2}"/>
         public static GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12, T13 result13)> WhenAny<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11, GDTask<T12> task12, GDTask<T13> task13)
         {
-            return new GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12, T13 result13)>(new WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11, task12, task13), 0);
+            return Core(ObserveWhenAnyCompletion(task1), ObserveWhenAnyCompletion(task2), ObserveWhenAnyCompletion(task3), ObserveWhenAnyCompletion(task4), ObserveWhenAnyCompletion(task5), ObserveWhenAnyCompletion(task6), ObserveWhenAnyCompletion(task7), ObserveWhenAnyCompletion(task8), ObserveWhenAnyCompletion(task9), ObserveWhenAnyCompletion(task10), ObserveWhenAnyCompletion(task11), ObserveWhenAnyCompletion(task12), ObserveWhenAnyCompletion(task13));
+
+            static async GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12, T13 result13)> Core(GDTask<WhenAnyObserved<T1>> task1, GDTask<WhenAnyObserved<T2>> task2, GDTask<WhenAnyObserved<T3>> task3, GDTask<WhenAnyObserved<T4>> task4, GDTask<WhenAnyObserved<T5>> task5, GDTask<WhenAnyObserved<T6>> task6, GDTask<WhenAnyObserved<T7>> task7, GDTask<WhenAnyObserved<T8>> task8, GDTask<WhenAnyObserved<T9>> task9, GDTask<WhenAnyObserved<T10>> task10, GDTask<WhenAnyObserved<T11>> task11, GDTask<WhenAnyObserved<T12>> task12, GDTask<WhenAnyObserved<T13>> task13)
+            {
+                var (winArgumentIndex, result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result12, result13) =
+                    await new GDTask<(int winArgumentIndex, WhenAnyObserved<T1> result1, WhenAnyObserved<T2> result2, WhenAnyObserved<T3> result3, WhenAnyObserved<T4> result4, WhenAnyObserved<T5> result5, WhenAnyObserved<T6> result6, WhenAnyObserved<T7> result7, WhenAnyObserved<T8> result8, WhenAnyObserved<T9> result9, WhenAnyObserved<T10> result10, WhenAnyObserved<T11> result11, WhenAnyObserved<T12> result12, WhenAnyObserved<T13> result13)>(new WhenAnyPromise<WhenAnyObserved<T1>, WhenAnyObserved<T2>, WhenAnyObserved<T3>, WhenAnyObserved<T4>, WhenAnyObserved<T5>, WhenAnyObserved<T6>, WhenAnyObserved<T7>, WhenAnyObserved<T8>, WhenAnyObserved<T9>, WhenAnyObserved<T10>, WhenAnyObserved<T11>, WhenAnyObserved<T12>, WhenAnyObserved<T13>>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11, task12, task13), 0);
+                return (winArgumentIndex, GetWhenAnyObservedResult(result1), GetWhenAnyObservedResult(result2), GetWhenAnyObservedResult(result3), GetWhenAnyObservedResult(result4), GetWhenAnyObservedResult(result5), GetWhenAnyObservedResult(result6), GetWhenAnyObservedResult(result7), GetWhenAnyObservedResult(result8), GetWhenAnyObservedResult(result9), GetWhenAnyObservedResult(result10), GetWhenAnyObservedResult(result11), GetWhenAnyObservedResult(result12), GetWhenAnyObservedResult(result13));
+            }
         }
 
         sealed class WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> : IGDTaskSource<(int, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12, T13 result13)>
@@ -3908,7 +3994,14 @@ namespace GodotTask
         /// <inheritdoc cref="WhenAny{T1,T2}"/>
         public static GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12, T13 result13, T14 result14)> WhenAny<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11, GDTask<T12> task12, GDTask<T13> task13, GDTask<T14> task14)
         {
-            return new GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12, T13 result13, T14 result14)>(new WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11, task12, task13, task14), 0);
+            return Core(ObserveWhenAnyCompletion(task1), ObserveWhenAnyCompletion(task2), ObserveWhenAnyCompletion(task3), ObserveWhenAnyCompletion(task4), ObserveWhenAnyCompletion(task5), ObserveWhenAnyCompletion(task6), ObserveWhenAnyCompletion(task7), ObserveWhenAnyCompletion(task8), ObserveWhenAnyCompletion(task9), ObserveWhenAnyCompletion(task10), ObserveWhenAnyCompletion(task11), ObserveWhenAnyCompletion(task12), ObserveWhenAnyCompletion(task13), ObserveWhenAnyCompletion(task14));
+
+            static async GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12, T13 result13, T14 result14)> Core(GDTask<WhenAnyObserved<T1>> task1, GDTask<WhenAnyObserved<T2>> task2, GDTask<WhenAnyObserved<T3>> task3, GDTask<WhenAnyObserved<T4>> task4, GDTask<WhenAnyObserved<T5>> task5, GDTask<WhenAnyObserved<T6>> task6, GDTask<WhenAnyObserved<T7>> task7, GDTask<WhenAnyObserved<T8>> task8, GDTask<WhenAnyObserved<T9>> task9, GDTask<WhenAnyObserved<T10>> task10, GDTask<WhenAnyObserved<T11>> task11, GDTask<WhenAnyObserved<T12>> task12, GDTask<WhenAnyObserved<T13>> task13, GDTask<WhenAnyObserved<T14>> task14)
+            {
+                var (winArgumentIndex, result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result12, result13, result14) =
+                    await new GDTask<(int winArgumentIndex, WhenAnyObserved<T1> result1, WhenAnyObserved<T2> result2, WhenAnyObserved<T3> result3, WhenAnyObserved<T4> result4, WhenAnyObserved<T5> result5, WhenAnyObserved<T6> result6, WhenAnyObserved<T7> result7, WhenAnyObserved<T8> result8, WhenAnyObserved<T9> result9, WhenAnyObserved<T10> result10, WhenAnyObserved<T11> result11, WhenAnyObserved<T12> result12, WhenAnyObserved<T13> result13, WhenAnyObserved<T14> result14)>(new WhenAnyPromise<WhenAnyObserved<T1>, WhenAnyObserved<T2>, WhenAnyObserved<T3>, WhenAnyObserved<T4>, WhenAnyObserved<T5>, WhenAnyObserved<T6>, WhenAnyObserved<T7>, WhenAnyObserved<T8>, WhenAnyObserved<T9>, WhenAnyObserved<T10>, WhenAnyObserved<T11>, WhenAnyObserved<T12>, WhenAnyObserved<T13>, WhenAnyObserved<T14>>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11, task12, task13, task14), 0);
+                return (winArgumentIndex, GetWhenAnyObservedResult(result1), GetWhenAnyObservedResult(result2), GetWhenAnyObservedResult(result3), GetWhenAnyObservedResult(result4), GetWhenAnyObservedResult(result5), GetWhenAnyObservedResult(result6), GetWhenAnyObservedResult(result7), GetWhenAnyObservedResult(result8), GetWhenAnyObservedResult(result9), GetWhenAnyObservedResult(result10), GetWhenAnyObservedResult(result11), GetWhenAnyObservedResult(result12), GetWhenAnyObservedResult(result13), GetWhenAnyObservedResult(result14));
+            }
         }
 
         sealed class WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> : IGDTaskSource<(int, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12, T13 result13, T14 result14)>
@@ -4473,7 +4566,14 @@ namespace GodotTask
         /// <inheritdoc cref="WhenAny{T1,T2}"/>
         public static GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12, T13 result13, T14 result14, T15 result15)> WhenAny<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11, GDTask<T12> task12, GDTask<T13> task13, GDTask<T14> task14, GDTask<T15> task15)
         {
-            return new GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12, T13 result13, T14 result14, T15 result15)>(new WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11, task12, task13, task14, task15), 0);
+            return Core(ObserveWhenAnyCompletion(task1), ObserveWhenAnyCompletion(task2), ObserveWhenAnyCompletion(task3), ObserveWhenAnyCompletion(task4), ObserveWhenAnyCompletion(task5), ObserveWhenAnyCompletion(task6), ObserveWhenAnyCompletion(task7), ObserveWhenAnyCompletion(task8), ObserveWhenAnyCompletion(task9), ObserveWhenAnyCompletion(task10), ObserveWhenAnyCompletion(task11), ObserveWhenAnyCompletion(task12), ObserveWhenAnyCompletion(task13), ObserveWhenAnyCompletion(task14), ObserveWhenAnyCompletion(task15));
+
+            static async GDTask<(int winArgumentIndex, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12, T13 result13, T14 result14, T15 result15)> Core(GDTask<WhenAnyObserved<T1>> task1, GDTask<WhenAnyObserved<T2>> task2, GDTask<WhenAnyObserved<T3>> task3, GDTask<WhenAnyObserved<T4>> task4, GDTask<WhenAnyObserved<T5>> task5, GDTask<WhenAnyObserved<T6>> task6, GDTask<WhenAnyObserved<T7>> task7, GDTask<WhenAnyObserved<T8>> task8, GDTask<WhenAnyObserved<T9>> task9, GDTask<WhenAnyObserved<T10>> task10, GDTask<WhenAnyObserved<T11>> task11, GDTask<WhenAnyObserved<T12>> task12, GDTask<WhenAnyObserved<T13>> task13, GDTask<WhenAnyObserved<T14>> task14, GDTask<WhenAnyObserved<T15>> task15)
+            {
+                var (winArgumentIndex, result1, result2, result3, result4, result5, result6, result7, result8, result9, result10, result11, result12, result13, result14, result15) =
+                    await new GDTask<(int winArgumentIndex, WhenAnyObserved<T1> result1, WhenAnyObserved<T2> result2, WhenAnyObserved<T3> result3, WhenAnyObserved<T4> result4, WhenAnyObserved<T5> result5, WhenAnyObserved<T6> result6, WhenAnyObserved<T7> result7, WhenAnyObserved<T8> result8, WhenAnyObserved<T9> result9, WhenAnyObserved<T10> result10, WhenAnyObserved<T11> result11, WhenAnyObserved<T12> result12, WhenAnyObserved<T13> result13, WhenAnyObserved<T14> result14, WhenAnyObserved<T15> result15)>(new WhenAnyPromise<WhenAnyObserved<T1>, WhenAnyObserved<T2>, WhenAnyObserved<T3>, WhenAnyObserved<T4>, WhenAnyObserved<T5>, WhenAnyObserved<T6>, WhenAnyObserved<T7>, WhenAnyObserved<T8>, WhenAnyObserved<T9>, WhenAnyObserved<T10>, WhenAnyObserved<T11>, WhenAnyObserved<T12>, WhenAnyObserved<T13>, WhenAnyObserved<T14>, WhenAnyObserved<T15>>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11, task12, task13, task14, task15), 0);
+                return (winArgumentIndex, GetWhenAnyObservedResult(result1), GetWhenAnyObservedResult(result2), GetWhenAnyObservedResult(result3), GetWhenAnyObservedResult(result4), GetWhenAnyObservedResult(result5), GetWhenAnyObservedResult(result6), GetWhenAnyObservedResult(result7), GetWhenAnyObservedResult(result8), GetWhenAnyObservedResult(result9), GetWhenAnyObservedResult(result10), GetWhenAnyObservedResult(result11), GetWhenAnyObservedResult(result12), GetWhenAnyObservedResult(result13), GetWhenAnyObservedResult(result14), GetWhenAnyObservedResult(result15));
+            }
         }
 
         sealed class WhenAnyPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> : IGDTaskSource<(int, T1 result1, T2 result2, T3 result3, T4 result4, T5 result5, T6 result6, T7 result7, T8 result8, T9 result9, T10 result10, T11 result11, T12 result12, T13 result13, T14 result14, T15 result15)>

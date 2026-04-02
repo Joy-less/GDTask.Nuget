@@ -9,39 +9,101 @@ public partial struct GDTask
 {
     /// <summary>
     /// Creates a task that will complete when any of the supplied tasks have completed.
+    /// The returned combinator task completes successfully with the first completed input representation,
+    /// even if that winning input is faulted or canceled.
     /// </summary>
     /// <typeparam name="T">The type of the result returned by the task.</typeparam>
     /// <returns>A task that represents the info for the first completed task.</returns>
-    public static GDTask<(bool hasResultLeft, T result)> WhenAny<T>(GDTask<T> leftTask, GDTask rightTask) => new(new WhenAnyLrPromise<T>(leftTask, rightTask), 0);
+    public static GDTask<(bool hasResultLeft, T result)> WhenAny<T>(GDTask<T> leftTask, GDTask rightTask)
+    {
+        return Core(ObserveWhenAnyCompletion(leftTask), ObserveWhenAnyCompletion(rightTask));
+
+        static async GDTask<(bool, T)> Core(GDTask<WhenAnyObserved<T>> leftTask, GDTask<AsyncUnit> rightTask)
+        {
+            var (hasResultLeft, result) = await new GDTask<(bool, WhenAnyObserved<T>)>(new WhenAnyLrPromise<WhenAnyObserved<T>>(leftTask, rightTask), 0);
+            return (hasResultLeft, GetWhenAnyObservedResult(result));
+        }
+    }
 
     /// <inheritdoc cref="WhenAny{T}(GDTask{T},GDTask)" />
-    public static GDTask<(int winArgumentIndex, T result)> WhenAny<T>(params GDTask<T>[] tasks) => new(new WhenAnyPromise<T>(tasks.AsSpan()), 0);
+    public static GDTask<(int winArgumentIndex, T result)> WhenAny<T>(params GDTask<T>[] tasks) => WhenAny((ReadOnlySpan<GDTask<T>>)tasks);
 
     /// <inheritdoc cref="WhenAny{T}(GDTask{T},GDTask)" />
-    public static GDTask<(int winArgumentIndex, T result)> WhenAny<T>(params ReadOnlySpan<GDTask<T>> tasks) => new(new WhenAnyPromise<T>(tasks), 0);
+    public static GDTask<(int winArgumentIndex, T result)> WhenAny<T>(params ReadOnlySpan<GDTask<T>> tasks)
+    {
+        if (tasks.Length == 0) throw new ArgumentException("The tasks argument contains no tasks.");
+
+        var observedTasks = new GDTask<WhenAnyObserved<T>>[tasks.Length];
+        for (var i = 0; i < tasks.Length; i++) observedTasks[i] = ObserveWhenAnyCompletion(tasks[i]);
+
+        return Core(observedTasks);
+
+        static async GDTask<(int, T)> Core(GDTask<WhenAnyObserved<T>>[] observedTasks)
+        {
+            var (winArgumentIndex, result) = await new GDTask<(int, WhenAnyObserved<T>)>(new WhenAnyPromise<WhenAnyObserved<T>>(observedTasks), 0);
+            return (winArgumentIndex, GetWhenAnyObservedResult(result));
+        }
+    }
 
     /// <inheritdoc cref="WhenAny{T}(GDTask{T},GDTask)" />
     public static GDTask<(int winArgumentIndex, T result)> WhenAny<T>(IEnumerable<GDTask<T>> tasks)
     {
         using var usage = EnumerableExtensions.ToSpan(tasks, out var span);
-        return new GDTask<(int, T)>(new WhenAnyPromise<T>(span), 0);
+        return WhenAny(span);
     }
 
     /// <summary>
     /// Creates a task that will complete when any of the supplied tasks have completed.
     /// </summary>
     /// <returns>A task that evaluates the index of the first completed task.</returns>
-    public static GDTask<int> WhenAny(params GDTask[] tasks) => new(new WhenAnyPromise(tasks.AsSpan()), 0);
+    public static GDTask<int> WhenAny(params GDTask[] tasks) => WhenAny((ReadOnlySpan<GDTask>)tasks);
 
     /// <inheritdoc cref="WhenAny(GDTask[])" />
-    public static GDTask<int> WhenAny(params ReadOnlySpan<GDTask> tasks) => new(new WhenAnyPromise(tasks), 0);
+    public static GDTask<int> WhenAny(params ReadOnlySpan<GDTask> tasks)
+    {
+        if (tasks.Length == 0) throw new ArgumentException("The tasks argument contains no tasks.");
+
+        var observedTasks = new GDTask<AsyncUnit>[tasks.Length];
+        for (var i = 0; i < tasks.Length; i++) observedTasks[i] = ObserveWhenAnyCompletion(tasks[i]);
+
+        return Core(observedTasks);
+
+        static async GDTask<int> Core(GDTask<AsyncUnit>[] observedTasks)
+        {
+            var (winArgumentIndex, _) = await new GDTask<(int, AsyncUnit)>(new WhenAnyPromise<AsyncUnit>(observedTasks), 0);
+            return winArgumentIndex;
+        }
+    }
 
     /// <inheritdoc cref="WhenAny(GDTask[])" />
     public static GDTask<int> WhenAny(IEnumerable<GDTask> tasks)
     {
         using var usage = EnumerableExtensions.ToSpan(tasks, out var span);
-        return new(new WhenAnyPromise(span), 0);
+        return WhenAny(span);
     }
+
+    private readonly struct WhenAnyObserved<T>(bool hasResult, T result)
+    {
+        public bool HasResult { get; } = hasResult;
+
+        public T Result { get; } = result;
+    }
+
+    private static async GDTask<AsyncUnit> ObserveWhenAnyCompletion(GDTask task)
+    {
+        try { await task; }
+        catch (Exception) { return AsyncUnit.Default; }
+
+        return AsyncUnit.Default;
+    }
+
+    private static async GDTask<WhenAnyObserved<T>> ObserveWhenAnyCompletion<T>(GDTask<T> task)
+    {
+        try { return new(true, await task); }
+        catch (Exception) { return default; }
+    }
+
+    private static T GetWhenAnyObservedResult<T>(WhenAnyObserved<T> result) => result.HasResult ? result.Result : default;
 
     private sealed class WhenAnyLrPromise<T> : IGDTaskSource<(bool, T)>
     {
