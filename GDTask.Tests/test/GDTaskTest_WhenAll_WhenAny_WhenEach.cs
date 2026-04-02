@@ -197,6 +197,37 @@ public class GDTaskTest_WhenAll_WhenAny_WhenEach
     }
 
     [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenAllT_MultipleFaults_AggregatesExceptions()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        var delayed = new GDTaskCompletionSource<int>();
+        var exceptionA = new ExpectedException();
+        var exceptionB = new InvalidOperationException("boom");
+        var combinedTask = GDTask.WhenAll(
+            GDTask.FromException<int>(exceptionA),
+            delayed.Task,
+            GDTask.FromException<int>(exceptionB));
+
+        await GDTask.DelayFrame(1);
+        Assertions.AssertThat(combinedTask.Status).IsEqual(GDTaskStatus.Pending);
+
+        delayed.TrySetResult(7);
+
+        try
+        {
+            await combinedTask;
+            throw new TestFailedException("AggregateException not thrown");
+        }
+        catch (AggregateException ex)
+        {
+            Assertions.AssertThat(ex.InnerExceptions.Count).IsEqual(2);
+            Assertions.AssertThat(ex.InnerExceptions[0]).IsSame(exceptionA);
+            Assertions.AssertThat(ex.InnerExceptions[1]).IsSame(exceptionB);
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
     public static async Task GDTask_WhenAll_Cancellation_WaitsForAllAndCancels()
     {
         await Constants.WaitForTaskReadyAsync();
@@ -237,6 +268,33 @@ public class GDTaskTest_WhenAll_WhenAny_WhenEach
         Assertions.AssertThat(combinedTask.Status).IsEqual(GDTaskStatus.Pending);
 
         delayed.TrySetResult();
+
+        try
+        {
+            await combinedTask;
+            throw new TestFailedException("ExpectedException not thrown");
+        }
+        catch (ExpectedException)
+        {
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenAllT_FaultTakesPrecedenceOverCancellation()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var delayed = new GDTaskCompletionSource<int>();
+        var combinedTask = GDTask.WhenAll(
+            GDTask.FromCanceled<int>(cancellationTokenSource.Token),
+            GDTask.FromException<int>(new ExpectedException()),
+            delayed.Task);
+
+        await GDTask.DelayFrame(1);
+        Assertions.AssertThat(combinedTask.Status).IsEqual(GDTaskStatus.Pending);
+
+        delayed.TrySetResult(7);
 
         try
         {
@@ -414,6 +472,61 @@ public class GDTaskTest_WhenAll_WhenAny_WhenEach
     }
 
     [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenAny_WinnerCancel_CombinatorSucceedsAndWinnerRemainsCanceled()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var winner = GDTask.FromCanceled(cancellationTokenSource.Token).Preserve();
+        var combinedTask = GDTask.WhenAny(winner, GDTask.Never(CancellationToken.None));
+
+        await GDTask.DelayFrame(1);
+
+        Assertions.AssertThat(combinedTask.Status).IsEqual(GDTaskStatus.Succeeded);
+        Assertions.AssertThat(await combinedTask).IsEqual(0);
+        Assertions.AssertThat(winner.Status).IsEqual(GDTaskStatus.Canceled);
+
+        try
+        {
+            await winner;
+            throw new TestFailedException("OperationCanceledException not thrown");
+        }
+        catch (OperationCanceledException ex)
+        {
+            Assertions.AssertThat(ex.CancellationToken).IsEqual(cancellationTokenSource.Token);
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenAnyT_WinnerFault_CombinatorSucceedsAndWinnerRemainsFaulted()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        var exception = new ExpectedException();
+        var winner = GDTask.FromException<int>(exception).Preserve();
+        var combinedTask = GDTask.WhenAny(new[] { winner, GDTask.Never<int>(CancellationToken.None) });
+
+        await GDTask.DelayFrame(1);
+
+        Assertions.AssertThat(combinedTask.Status).IsEqual(GDTaskStatus.Succeeded);
+
+        var (winArgumentIndex, result) = await combinedTask;
+        Assertions.AssertThat(winArgumentIndex).IsEqual(0);
+        Assertions.AssertThat(result).IsEqual(default(int));
+        Assertions.AssertThat(winner.Status).IsEqual(GDTaskStatus.Faulted);
+
+        try
+        {
+            await winner;
+            throw new TestFailedException("ExpectedException not thrown");
+        }
+        catch (ExpectedException ex)
+        {
+            Assertions.AssertThat(ex).IsSame(exception);
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
     public static async Task GDTask_WhenAny_NonWinningTask_ContinuesRunning()
     {
         await Constants.WaitForTaskReadyAsync();
@@ -565,6 +678,39 @@ public class GDTaskTest_WhenAll_WhenAny_WhenEach
         Assertions.AssertThat(results.Count).IsEqual(3);
         Assertions.AssertThat(results.OrderBy(value => value).ToArray())
             .ContainsExactly(new[] { 1, 2, 3 });
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenEach_RepeatedCurrentAccess_DoesNotLoseItems()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        var enumerator = GDTask.WhenEach((IEnumerable<GDTask>)new[]
+        {
+            GDTask.CompletedTask,
+            GDTask.CompletedTask,
+            GDTask.CompletedTask,
+        }).GetAsyncEnumerator();
+
+        var count = 0;
+
+        try
+        {
+            while (await enumerator.MoveNextAsync())
+            {
+                var firstRead = enumerator.Current;
+                var secondRead = enumerator.Current;
+
+                await firstRead;
+                await secondRead;
+                count++;
+            }
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+        }
+
+        Assertions.AssertThat(count).IsEqual(3);
     }
 
     [TestCase, RequireGodotRuntime]

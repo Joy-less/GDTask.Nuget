@@ -185,13 +185,13 @@ public static partial class GDTaskExtensions
         public async GDTask<(bool IsTimeout, T Result)> TimeoutWithoutException(TimeSpan timeout, DelayType delayType, IPlayerLoop timeoutCheckLoop, CancellationTokenSource taskCancellationTokenSource = null)
         {
             Error.ThrowArgumentNullException(timeoutCheckLoop, nameof(timeoutCheckLoop));
+            var observedTask = task.Preserve();
             var delayCancellationTokenSource = new CancellationTokenSource();
             var timeoutTask = GDTask.Delay(timeout, delayType, timeoutCheckLoop, delayCancellationTokenSource.Token).SuppressCancellationThrow();
 
-            int winArgIndex;
-            (bool IsCanceled, T Result) taskResult;
+            bool hasTaskResult;
 
-            try { (winArgIndex, taskResult, _) = await GDTask.WhenAny(task.SuppressCancellationThrow(), timeoutTask); }
+            try { (hasTaskResult, _) = await GDTask.WhenAny(observedTask, (GDTask)timeoutTask); }
             catch
             {
                 delayCancellationTokenSource.Cancel();
@@ -200,7 +200,7 @@ public static partial class GDTaskExtensions
             }
 
             // timeout
-            if (winArgIndex == 1)
+            if (!hasTaskResult)
             {
                 if (taskCancellationTokenSource != null)
                 {
@@ -214,9 +214,14 @@ public static partial class GDTaskExtensions
             delayCancellationTokenSource.Cancel();
             delayCancellationTokenSource.Dispose();
 
-            if (taskResult.IsCanceled) return (true, default);
-
-            return (false, taskResult.Result);
+            try
+            {
+                return (false, await observedTask);
+            }
+            catch (OperationCanceledException)
+            {
+                return (true, default);
+            }
         }
 
         /// <inheritdoc cref="Forget(GDTask)" />
@@ -439,13 +444,13 @@ public static partial class GDTaskExtensions
         public async GDTask<bool> TimeoutWithoutException(TimeSpan timeout, DelayType delayType, IPlayerLoop timeoutCheckLoop, CancellationTokenSource taskCancellationTokenSource = null)
         {
             Error.ThrowArgumentNullException(timeoutCheckLoop, nameof(timeoutCheckLoop));
+            var observedTask = task.Preserve();
             var delayCancellationTokenSource = new CancellationTokenSource();
             var timeoutTask = GDTask.Delay(timeout, delayType, timeoutCheckLoop, delayCancellationTokenSource.Token).SuppressCancellationThrow();
 
             int winArgIndex;
-            bool taskResultIsCanceled;
 
-            try { (winArgIndex, taskResultIsCanceled, _) = await GDTask.WhenAny(task.SuppressCancellationThrow(), timeoutTask); }
+            try { winArgIndex = await GDTask.WhenAny(observedTask, timeoutTask); }
             catch
             {
                 delayCancellationTokenSource.Cancel();
@@ -468,9 +473,15 @@ public static partial class GDTaskExtensions
             delayCancellationTokenSource.Cancel();
             delayCancellationTokenSource.Dispose();
 
-            if (taskResultIsCanceled) return true;
-
-            return false;
+            try
+            {
+                await observedTask;
+                return false;
+            }
+            catch (OperationCanceledException)
+            {
+                return true;
+            }
         }
 
         /// <summary>

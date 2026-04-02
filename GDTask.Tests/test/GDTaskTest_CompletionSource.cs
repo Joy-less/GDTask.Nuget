@@ -250,6 +250,83 @@ public class GDTaskTest_CompletionSource
     }
 
     [TestCase, RequireGodotRuntime]
+    public static void CompletionSourceT_ConcurrentTrySetResultOrException_ObservedWinnerOnly()
+    {
+        for (var iteration = 0; iteration < ConcurrentCompletionIterations; iteration++)
+        {
+            var source = new GDTaskCompletionSource<int>();
+            var winner = RunConcurrentCompletion(index =>
+                index == 0
+                    ? source.TrySetResult(index)
+                    : source.TrySetException(new ConcurrentCompletionException(index)));
+
+            if (winner == 0)
+            {
+                Assertions.AssertThat(source.Task.Status == GDTaskStatus.Succeeded).IsTrue();
+                Assertions.AssertThat(source.GetResult(0)).IsEqual(0);
+                continue;
+            }
+
+            Assertions.AssertThat(source.Task.Status == GDTaskStatus.Faulted).IsTrue();
+
+            try
+            {
+                source.GetResult(0);
+            }
+            catch (ConcurrentCompletionException exception)
+            {
+                Assertions.AssertThat(exception.Id).IsEqual(winner);
+                continue;
+            }
+
+            throw new TestFailedException("Expected ConcurrentCompletionException was not thrown.");
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static void CompletionSourceT_ConcurrentTrySetResultOrCanceled_ObservedWinnerOnly()
+    {
+        for (var iteration = 0; iteration < ConcurrentCompletionIterations; iteration++)
+        {
+            var source = new GDTaskCompletionSource<int>();
+            var tokenSources = CreateCancellationTokenSources();
+
+            try
+            {
+                var winner = RunConcurrentCompletion(index =>
+                    index == 0
+                        ? source.TrySetResult(index)
+                        : source.TrySetCanceled(tokenSources[index].Token));
+
+                if (winner == 0)
+                {
+                    Assertions.AssertThat(source.Task.Status == GDTaskStatus.Succeeded).IsTrue();
+                    Assertions.AssertThat(source.GetResult(0)).IsEqual(0);
+                    continue;
+                }
+
+                Assertions.AssertThat(source.Task.Status == GDTaskStatus.Canceled).IsTrue();
+
+                try
+                {
+                    source.GetResult(0);
+                }
+                catch (OperationCanceledException exception)
+                {
+                    Assertions.AssertThat(exception.CancellationToken.Equals(tokenSources[winner].Token)).IsTrue();
+                    continue;
+                }
+
+                throw new TestFailedException("Expected OperationCanceledException was not thrown.");
+            }
+            finally
+            {
+                DisposeCancellationTokenSources(tokenSources);
+            }
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
     public static void CompletionSourceT_ConcurrentTrySetException_ObservedWinnerOnly()
     {
         for (var iteration = 0; iteration < ConcurrentCompletionIterations; iteration++)

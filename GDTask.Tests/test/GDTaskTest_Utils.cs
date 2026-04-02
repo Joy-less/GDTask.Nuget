@@ -205,6 +205,16 @@ public class GDTaskTest_Utils
     }
 
     [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_TimeoutWithoutException_SuccessReturnsFalse()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        var isTimeout = await Constants.Delay().TimeoutWithoutException(TimeSpan.FromSeconds(1));
+
+        Assertions.AssertThat(isTimeout).IsFalse();
+    }
+
+    [TestCase, RequireGodotRuntime]
     public static async Task GDTask_TimeoutWithoutException_FaultedTaskRethrows()
     {
         await Constants.WaitForTaskReadyAsync();
@@ -258,6 +268,17 @@ public class GDTaskTest_Utils
             var (isTimeout, _) = await GDTask.Never<int>(CancellationToken.None).TimeoutWithoutException(Constants.DelayTimeSpan);
             Assertions.AssertThat(isTimeout).IsTrue();
         }
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTaskT_TimeoutWithoutException_SuccessReturnsFalseAndPreservesResult()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        var (isTimeout, result) = await Constants.DelayWithReturn().TimeoutWithoutException(TimeSpan.FromSeconds(1));
+
+        Assertions.AssertThat(isTimeout).IsFalse();
+        Assertions.AssertThat(result).IsEqual(Constants.ReturnValue);
     }
 
     [TestCase, RequireGodotRuntime]
