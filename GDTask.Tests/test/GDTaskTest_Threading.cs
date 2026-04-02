@@ -49,6 +49,38 @@ public class GDTaskTest_Threading
     }
 
     [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_SwitchToMainThread_WrongMainThreadTiming_DoesNotCompleteSynchronously()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        var completionSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        GDTask.Post(
+            () => completionSource.SetResult(GDTask.SwitchToMainThread(PlayerLoopTiming.PhysicsProcess).GetAwaiter().IsCompleted),
+            PlayerLoopTiming.Process
+        );
+
+        var isCompleted = await completionSource.Task;
+
+        Assertions.AssertThat(isCompleted).IsFalse();
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_SwitchToMainThread_CurrentMainThreadTiming_CompletesSynchronously()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        var completionSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        GDTask.Post(
+            () => completionSource.SetResult(GDTask.SwitchToMainThread(PlayerLoopTiming.Process).GetAwaiter().IsCompleted),
+            PlayerLoopTiming.Process
+        );
+
+        var isCompleted = await completionSource.Task;
+
+        Assertions.AssertThat(isCompleted).IsTrue();
+    }
+
+    [TestCase, RequireGodotRuntime]
     public static async Task GDTask_SwitchToMainThread_CustomPlayerLoop()
     {
         await Constants.WaitForTaskReadyAsync();
@@ -68,6 +100,37 @@ public class GDTaskTest_Threading
 
         playerLoop.Dispose();
         Assertions.AssertThat(resumedOnMainThread).IsTrue();
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_SwitchToMainThread_CustomPlayerLoop_RespectsCurrentTickContext()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        using var playerLoop = new ManualPlayerLoop();
+
+        var queuedTask = GDTask.Create(async () =>
+        {
+            await GDTask.SwitchToMainThread(playerLoop);
+            return Thread.CurrentThread.ManagedThreadId;
+        }).AsTask();
+
+        Assertions.AssertThat(queuedTask.IsCompleted).IsFalse();
+
+        var completionSource = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var probeTask = GDTask.Create(async () =>
+        {
+            await GDTask.Yield(playerLoop);
+            completionSource.SetResult(GDTask.SwitchToMainThread(playerLoop).GetAwaiter().IsCompleted);
+        }).AsTask();
+
+        playerLoop.Tick();
+
+        var resumedThreadId = await queuedTask;
+        var isCompletedInsideLoop = await completionSource.Task;
+        await probeTask;
+
+        Assertions.AssertThat(resumedThreadId).IsEqual(Thread.CurrentThread.ManagedThreadId);
+        Assertions.AssertThat(isCompletedInsideLoop).IsTrue();
     }
 
     [TestCase, RequireGodotRuntime]

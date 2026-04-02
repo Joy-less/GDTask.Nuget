@@ -10,6 +10,7 @@ static class GDTaskScheduler
 {
     private static readonly ConcurrentDictionary<IPlayerLoop, PlayerLoopRunner> Runners = [];
     private static readonly ConcurrentDictionary<IPlayerLoop, ContinuationQueue> Yielders = [];
+    [ThreadStatic] private static IPlayerLoop _currentPlayerLoop;
     public static bool IsMainThread => Environment.CurrentManagedThreadId == MainThreadId;
 
     public static int MainThreadId
@@ -43,6 +44,23 @@ static class GDTaskScheduler
         || ReferenceEquals(playerLoop, PlayerLoopRunnerProvider.IsolatedPhysicsProcess)
         || ReferenceEquals(playerLoop, PlayerLoopRunnerProvider.Deferred);
 
+    internal static bool IsCurrentPlayerLoop(IPlayerLoop playerLoop) =>
+        IsMainThread && ReferenceEquals(_currentPlayerLoop, playerLoop);
+
+    private static void RunInPlayerLoopContext(IPlayerLoop playerLoop, double deltaTime, Action<double> callback)
+    {
+        var previousPlayerLoop = _currentPlayerLoop;
+        _currentPlayerLoop = playerLoop;
+        try
+        {
+            callback(deltaTime);
+        }
+        finally
+        {
+            _currentPlayerLoop = previousPlayerLoop;
+        }
+    }
+
     public static void AddAction(PlayerLoopTiming timing, IPlayerLoopItem action) =>
         AddAction(GetPlayerLoop(timing), action);
 
@@ -52,7 +70,7 @@ static class GDTaskScheduler
             state =>
             {
                 var associatedRunner = new PlayerLoopRunner();
-                state.OnProcess += associatedRunner.Run;
+                state.OnProcess += deltaTime => RunInPlayerLoopContext(state, deltaTime, associatedRunner.Run);
                 state.OnPredelete += () =>
                 {
                     associatedRunner.Clear();
@@ -71,7 +89,7 @@ static class GDTaskScheduler
             state =>
             {
                 var associatedQueue = new ContinuationQueue();
-                state.OnProcess += associatedQueue.Run;
+                state.OnProcess += deltaTime => RunInPlayerLoopContext(state, deltaTime, associatedQueue.Run);
                 state.OnPredelete += () =>
                 {
                     associatedQueue.Clear();

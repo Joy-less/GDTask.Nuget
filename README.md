@@ -95,8 +95,12 @@ public async GDTask ApiUsage()
     
     /* Threaded work */
     
-    // Creates an awaitable that asynchronously yields back to the next Process from the main thread when awaited.
+    // Creates an awaitable that yields back to the current or next requested main-thread player-loop update.
     await GDTask.SwitchToMainThread();
+
+    // If you're already on the main thread but not yet in the requested update phase,
+    // the continuation resumes on that next requested update instead of completing immediately.
+    await GDTask.SwitchToMainThread(PlayerLoopTiming.PhysicsProcess);
     
     /* Main thread work */
     

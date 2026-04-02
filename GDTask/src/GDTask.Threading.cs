@@ -12,9 +12,10 @@ public partial struct GDTask
     /// thread when awaited, with specified <see cref="CancellationToken" />.
     /// </summary>
     /// <returns>
-    /// A context that, when awaited, will asynchronously transition back into the next <see cref="PlayerLoopTiming.Process" />
-    /// from the main thread at the time of the await. This awaitable behaves identically as
-    /// <see cref="Yield(CancellationToken)" /> in case the call site is from the main thread.
+    /// A context that, when awaited, transitions back into the current or next <see cref="PlayerLoopTiming.Process" /> update on
+    /// the main thread at the time of the await. If the await already runs on the main thread during that same
+    /// <see cref="PlayerLoopTiming.Process" /> update, it may complete synchronously; otherwise it resumes on the next
+    /// requested update.
     /// </returns>
     public static SwitchToMainThreadAwaitable SwitchToMainThread(CancellationToken cancellationToken = default) => new(GDTaskScheduler.GetPlayerLoop(PlayerLoopTiming.Process), cancellationToken);
 
@@ -23,9 +24,9 @@ public partial struct GDTask
     /// thread when awaited, with specified <see cref="CancellationToken" />.
     /// </summary>
     /// <returns>
-    /// A context that, when awaited, will asynchronously transition back into the next provided
-    /// <see cref="PlayerLoopTiming" /> from the main thread at the time of the await. This awaitable behaves identically as
-    /// <see cref="Yield(PlayerLoopTiming, CancellationToken)" /> in case the call site is from the main thread.
+    /// A context that, when awaited, transitions back into the current or next provided <see cref="PlayerLoopTiming" /> update
+    /// on the main thread at the time of the await. If the await already runs on the main thread during that same requested
+    /// update, it may complete synchronously; otherwise it resumes on the next requested update.
     /// </returns>
     public static SwitchToMainThreadAwaitable SwitchToMainThread(PlayerLoopTiming timing, CancellationToken cancellationToken = default) => new(GDTaskScheduler.GetPlayerLoop(timing), cancellationToken);
 
@@ -34,8 +35,9 @@ public partial struct GDTask
     /// thread when awaited, with specified <see cref="CancellationToken" />.
     /// </summary>
     /// <returns>
-    /// A context that, when awaited, will asynchronously transition back into the next provided <see cref="IPlayerLoop" />
-    /// from the main thread at the time of the await.
+    /// A context that, when awaited, transitions back into the current or next update of the provided
+    /// <see cref="IPlayerLoop" /> on the main thread at the time of the await. If the await already runs during that same
+    /// player-loop update, it may complete synchronously; otherwise it resumes on the next requested update.
     /// </returns>
     public static SwitchToMainThreadAwaitable SwitchToMainThread(IPlayerLoop playerLoop, CancellationToken cancellationToken = default)
     {
@@ -180,7 +182,8 @@ public readonly struct SwitchToMainThreadAwaitable
             get
             {
                 var currentThreadId = Environment.CurrentManagedThreadId;
-                if (GDTaskScheduler.MainThreadId == currentThreadId) return true; // run immediate.
+                if (GDTaskScheduler.MainThreadId == currentThreadId
+                    && GDTaskScheduler.IsCurrentPlayerLoop(_playerLoop)) return true;
 
                 return false; // register continuation.
             }
