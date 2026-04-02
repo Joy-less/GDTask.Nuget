@@ -58,10 +58,14 @@ struct GDTaskCompletionSourceCore<TResult>
 {
     // Struct Size: TResult + (8 + 2 + 1 + 1 + 8 + 8)
 
+    private const int Pending = 0;
+    private const int Completing = 1;
+    private const int Completed = 2;
+
     private TResult _result;
     private object _error; // ExceptionHolder or OperationCanceledException
     private bool _hasUnhandledError;
-    private int _completedCount; // 0: completed == false
+    private int _completedCount;
     private Action<object> _continuation;
     private object _continuationState;
 
@@ -75,7 +79,7 @@ struct GDTaskCompletionSourceCore<TResult>
             Version += 1; // incr version.
         }
 
-        _completedCount = 0;
+        _completedCount = Pending;
         _result = default;
         _error = null;
         _hasUnhandledError = false;
@@ -101,16 +105,18 @@ struct GDTaskCompletionSourceCore<TResult>
     [DebuggerHidden]
     public bool TrySetResult(TResult result)
     {
-        if (Interlocked.Increment(ref _completedCount) == 1)
+        if (Interlocked.CompareExchange(ref _completedCount, Completing, Pending) == Pending)
         {
-            // setup result
             _result = result;
+
+            Volatile.Write(ref _completedCount, Completed);
 
             if (_continuation != null || Interlocked.CompareExchange(ref _continuation, GDTaskCompletionSourceCoreShared.SSentinel, null) != null)
             {
                 _continuation!(_continuationState);
-                return true;
             }
+
+            return true;
         }
 
         return false;
@@ -121,18 +127,20 @@ struct GDTaskCompletionSourceCore<TResult>
     [DebuggerHidden]
     public bool TrySetException(Exception error)
     {
-        if (Interlocked.Increment(ref _completedCount) == 1)
+        if (Interlocked.CompareExchange(ref _completedCount, Completing, Pending) == Pending)
         {
-            // setup result
             _hasUnhandledError = true;
             if (error is OperationCanceledException) _error = error;
             else _error = new ExceptionHolder(ExceptionDispatchInfo.Capture(error));
 
+            Volatile.Write(ref _completedCount, Completed);
+
             if (_continuation != null || Interlocked.CompareExchange(ref _continuation, GDTaskCompletionSourceCoreShared.SSentinel, null) != null)
             {
                 _continuation!(_continuationState);
-                return true;
             }
+
+            return true;
         }
 
         return false;
@@ -141,17 +149,19 @@ struct GDTaskCompletionSourceCore<TResult>
     [DebuggerHidden]
     public bool TrySetCanceled(CancellationToken cancellationToken = default)
     {
-        if (Interlocked.Increment(ref _completedCount) == 1)
+        if (Interlocked.CompareExchange(ref _completedCount, Completing, Pending) == Pending)
         {
-            // setup result
             _hasUnhandledError = true;
             _error = new OperationCanceledException(cancellationToken);
+
+            Volatile.Write(ref _completedCount, Completed);
 
             if (_continuation != null || Interlocked.CompareExchange(ref _continuation, GDTaskCompletionSourceCoreShared.SSentinel, null) != null)
             {
                 _continuation!(_continuationState);
-                return true;
             }
+
+            return true;
         }
 
         return false;
@@ -164,10 +174,10 @@ struct GDTaskCompletionSourceCore<TResult>
     /// <summary>Gets the status of the operation.</summary>
     /// <param name="token">Opaque value that was provided to the <see cref="GDTask" />'s constructor.</param>
     [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly GDTaskStatus GetStatus(short token)
+    public GDTaskStatus GetStatus(short token)
     {
         ValidateToken(token);
-        return _continuation == null || _completedCount == 0 ? GDTaskStatus.Pending
+        return Volatile.Read(ref _completedCount) != Completed ? GDTaskStatus.Pending
             : _error == null ? GDTaskStatus.Succeeded
             : _error is OperationCanceledException ? GDTaskStatus.Canceled
             : GDTaskStatus.Faulted;
@@ -175,8 +185,8 @@ struct GDTaskCompletionSourceCore<TResult>
 
     /// <summary>Gets the status of the operation without token validation.</summary>
     [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public readonly GDTaskStatus UnsafeGetStatus() =>
-        _continuation == null || _completedCount == 0 ? GDTaskStatus.Pending
+    public GDTaskStatus UnsafeGetStatus() =>
+        Volatile.Read(ref _completedCount) != Completed ? GDTaskStatus.Pending
         : _error == null ? GDTaskStatus.Succeeded
         : _error is OperationCanceledException ? GDTaskStatus.Canceled
         : GDTaskStatus.Faulted;
@@ -188,7 +198,7 @@ struct GDTaskCompletionSourceCore<TResult>
     public TResult GetResult(short token)
     {
         ValidateToken(token);
-        if (_completedCount == 0) throw new InvalidOperationException("Not yet completed, GDTask only allow to use await.");
+        if (Volatile.Read(ref _completedCount) != Completed) throw new InvalidOperationException("Not yet completed, GDTask only allow to use await.");
 
         if (_error != null)
         {
@@ -522,7 +532,7 @@ public class GDTaskCompletionSource : IGDTaskSource, IPromise
     /// </summary>
     /// <returns>True if the operation was successful; otherwise, false.</returns>
     [DebuggerHidden]
-    public bool TrySetResult() => TrySignalCompletion(GDTaskStatus.Succeeded);
+    public bool TrySetResult() => TrySignalCompletion(GDTaskStatus.Succeeded, static () => { });
 
     /// <summary>
     /// Attempts to transition the underlying <see cref="GDTask" /> into the <see cref="GDTaskStatus.Canceled" /> state.
@@ -531,10 +541,7 @@ public class GDTaskCompletionSource : IGDTaskSource, IPromise
     [DebuggerHidden]
     public bool TrySetCanceled(CancellationToken cancellationToken = default)
     {
-        if (UnsafeGetStatus() != GDTaskStatus.Pending) return false;
-
-        _cancellationToken = cancellationToken;
-        return TrySignalCompletion(GDTaskStatus.Canceled);
+        return TrySignalCompletion(GDTaskStatus.Canceled, () => _cancellationToken = cancellationToken);
     }
 
     /// <summary>
@@ -547,10 +554,7 @@ public class GDTaskCompletionSource : IGDTaskSource, IPromise
     {
         if (exception is OperationCanceledException oce) return TrySetCanceled(oce.CancellationToken);
 
-        if (UnsafeGetStatus() != GDTaskStatus.Pending) return false;
-
-        _exception = new(ExceptionDispatchInfo.Capture(exception));
-        return TrySignalCompletion(GDTaskStatus.Faulted);
+        return TrySignalCompletion(GDTaskStatus.Faulted, () => _exception = new(ExceptionDispatchInfo.Capture(exception)));
     }
 
     /// <summary>
@@ -565,7 +569,7 @@ public class GDTaskCompletionSource : IGDTaskSource, IPromise
     {
         MarkHandled();
 
-        var status = (GDTaskStatus)_intStatus;
+        var status = (GDTaskStatus)Volatile.Read(ref _intStatus);
 
         switch (status)
         {
@@ -590,7 +594,7 @@ public class GDTaskCompletionSource : IGDTaskSource, IPromise
     /// It is not intended to be called directly by user code.
     /// </remarks>
     [DebuggerHidden]
-    public GDTaskStatus GetStatus(short token) => (GDTaskStatus)_intStatus;
+    public GDTaskStatus GetStatus(short token) => (GDTaskStatus)Volatile.Read(ref _intStatus);
 
     /// <summary>
     /// Gets the status of the underlying <see cref="GDTask" /> without validating the token
@@ -601,7 +605,7 @@ public class GDTaskCompletionSource : IGDTaskSource, IPromise
     /// It is not intended to be called directly by user code.
     /// </remarks>
     [DebuggerHidden]
-    public GDTaskStatus UnsafeGetStatus() => (GDTaskStatus)_intStatus;
+    public GDTaskStatus UnsafeGetStatus() => (GDTaskStatus)Volatile.Read(ref _intStatus);
 
     /// <summary>
     /// Schedules the continuation action for this operation.
@@ -626,7 +630,7 @@ public class GDTaskCompletionSource : IGDTaskSource, IPromise
 
         lock (lockGate!) // wait TrySignalCompletion, after status is not pending.
         {
-            if ((GDTaskStatus)_intStatus != GDTaskStatus.Pending)
+            if ((GDTaskStatus)Volatile.Read(ref _intStatus) != GDTaskStatus.Pending)
             {
                 continuation(state);
                 return;
@@ -646,41 +650,44 @@ public class GDTaskCompletionSource : IGDTaskSource, IPromise
     }
 
     [DebuggerHidden]
-    private bool TrySignalCompletion(GDTaskStatus status)
+    private bool TrySignalCompletion(GDTaskStatus status, Action storePayload)
     {
-        if (Interlocked.CompareExchange(ref _intStatus, (int)status, (int)GDTaskStatus.Pending) == (int)GDTaskStatus.Pending)
+        if (_gate == null)
         {
-            if (_gate == null)
-            {
 #if NET9_0_OR_GREATER
-                    Interlocked.CompareExchange(ref _gate, new(), null);
+            Interlocked.CompareExchange(ref _gate, new(), null);
 #else
-                Interlocked.CompareExchange(ref _gate, new(), null);
+            Interlocked.CompareExchange(ref _gate, new(), null);
 #endif
+        }
+
+        var lockGate = Volatile.Read(ref _gate);
+
+        lock (lockGate!) // wait OnCompleted.
+        {
+            if ((GDTaskStatus)Volatile.Read(ref _intStatus) != GDTaskStatus.Pending)
+            {
+                return false;
             }
 
-            var lockGate = Volatile.Read(ref _gate);
+            storePayload();
+            Volatile.Write(ref _intStatus, (int)status);
 
-            lock (lockGate!) // wait OnCompleted.
-            {
-                if (_singleContinuation != null)
-                    try { _singleContinuation(_singleState); }
+            if (_singleContinuation != null)
+                try { _singleContinuation(_singleState); }
+                catch (Exception ex) { GDTaskExceptionHandler.PublishUnobservedTaskException(ex); }
+
+            if (_secondaryContinuationList != null)
+                foreach (var (continuation, continuationState) in _secondaryContinuationList)
+                    try { continuation(continuationState); }
                     catch (Exception ex) { GDTaskExceptionHandler.PublishUnobservedTaskException(ex); }
 
-                if (_secondaryContinuationList != null)
-                    foreach (var (c, state) in _secondaryContinuationList)
-                        try { c(state); }
-                        catch (Exception ex) { GDTaskExceptionHandler.PublishUnobservedTaskException(ex); }
-
-                _singleContinuation = null;
-                _singleState = null;
-                _secondaryContinuationList = null;
-            }
+            _singleContinuation = null;
+            _singleState = null;
+            _secondaryContinuationList = null;
 
             return true;
         }
-
-        return false;
     }
 }
 
@@ -697,6 +704,10 @@ public class GDTaskCompletionSource : IGDTaskSource, IPromise
 /// completion of the external asynchronous operation to be propagated to the underlying GDTask{T}. The
 /// separation also ensures that consumers are not able to transition the state without access to the
 /// corresponding GDTaskCompletionSource{T}.
+/// <para>
+/// All members of <see cref="GDTaskCompletionSource{T}" /> are thread-safe
+/// and may be used from multiple threads concurrently.
+/// </para>
 /// </remarks>
 /// <typeparam name="T">The type of the result value associated with this GDTask.</typeparam>
 public class GDTaskCompletionSource<T> : IGDTaskSource<T>, IPromise<T>
@@ -759,10 +770,7 @@ public class GDTaskCompletionSource<T> : IGDTaskSource<T>, IPromise<T>
     [DebuggerHidden]
     public bool TrySetResult(T result)
     {
-        if (UnsafeGetStatus() != GDTaskStatus.Pending) return false;
-
-        _result = result;
-        return TrySignalCompletion(GDTaskStatus.Succeeded);
+        return TrySignalCompletion(GDTaskStatus.Succeeded, () => _result = result);
     }
 
     /// <summary>
@@ -773,10 +781,7 @@ public class GDTaskCompletionSource<T> : IGDTaskSource<T>, IPromise<T>
     [DebuggerHidden]
     public bool TrySetCanceled(CancellationToken cancellationToken = default)
     {
-        if (UnsafeGetStatus() != GDTaskStatus.Pending) return false;
-
-        _cancellationToken = cancellationToken;
-        return TrySignalCompletion(GDTaskStatus.Canceled);
+        return TrySignalCompletion(GDTaskStatus.Canceled, () => _cancellationToken = cancellationToken);
     }
 
     /// <summary>
@@ -789,10 +794,7 @@ public class GDTaskCompletionSource<T> : IGDTaskSource<T>, IPromise<T>
     {
         if (exception is OperationCanceledException oce) return TrySetCanceled(oce.CancellationToken);
 
-        if (UnsafeGetStatus() != GDTaskStatus.Pending) return false;
-
-        _exception = new(ExceptionDispatchInfo.Capture(exception));
-        return TrySignalCompletion(GDTaskStatus.Faulted);
+        return TrySignalCompletion(GDTaskStatus.Faulted, () => _exception = new(ExceptionDispatchInfo.Capture(exception)));
     }
 
     /// <summary>
@@ -809,7 +811,7 @@ public class GDTaskCompletionSource<T> : IGDTaskSource<T>, IPromise<T>
     {
         MarkHandled();
 
-        var status = (GDTaskStatus)_intStatus;
+        var status = (GDTaskStatus)Volatile.Read(ref _intStatus);
 
         switch (status)
         {
@@ -838,7 +840,7 @@ public class GDTaskCompletionSource<T> : IGDTaskSource<T>, IPromise<T>
     /// It is not intended to be called directly by user code.
     /// </remarks>
     [DebuggerHidden]
-    public GDTaskStatus GetStatus(short token) => (GDTaskStatus)_intStatus;
+    public GDTaskStatus GetStatus(short token) => (GDTaskStatus)Volatile.Read(ref _intStatus);
 
     /// <summary>
     /// Gets the status of the underlying <see cref="GDTask{T}" /> without
@@ -849,7 +851,7 @@ public class GDTaskCompletionSource<T> : IGDTaskSource<T>, IPromise<T>
     /// It is not intended to be called directly by user code.
     /// </remarks>
     [DebuggerHidden]
-    public GDTaskStatus UnsafeGetStatus() => (GDTaskStatus)_intStatus;
+    public GDTaskStatus UnsafeGetStatus() => (GDTaskStatus)Volatile.Read(ref _intStatus);
 
     /// <summary>
     /// Schedules the continuation action for this operation.
@@ -877,7 +879,7 @@ public class GDTaskCompletionSource<T> : IGDTaskSource<T>, IPromise<T>
 
         lock (lockGate!) // wait TrySignalCompletion, after status is not pending.
         {
-            if ((GDTaskStatus)_intStatus != GDTaskStatus.Pending)
+            if ((GDTaskStatus)Volatile.Read(ref _intStatus) != GDTaskStatus.Pending)
             {
                 continuation(state);
                 return;
@@ -897,40 +899,43 @@ public class GDTaskCompletionSource<T> : IGDTaskSource<T>, IPromise<T>
     }
 
     [DebuggerHidden]
-    private bool TrySignalCompletion(GDTaskStatus status)
+    private bool TrySignalCompletion(GDTaskStatus status, Action storePayload)
     {
-        if (Interlocked.CompareExchange(ref _intStatus, (int)status, (int)GDTaskStatus.Pending) == (int)GDTaskStatus.Pending)
+        if (_gate == null)
         {
-            if (_gate == null)
-            {
 #if NET9_0_OR_GREATER
-                    Interlocked.CompareExchange(ref _gate, new(), null);
+            Interlocked.CompareExchange(ref _gate, new(), null);
 #else
-                Interlocked.CompareExchange(ref _gate, new(), null);
+            Interlocked.CompareExchange(ref _gate, new(), null);
 #endif
+        }
+
+        var lockGate = Volatile.Read(ref _gate);
+
+        lock (lockGate!) // wait OnCompleted.
+        {
+            if ((GDTaskStatus)Volatile.Read(ref _intStatus) != GDTaskStatus.Pending)
+            {
+                return false;
             }
 
-            var lockGate = Volatile.Read(ref _gate);
+            storePayload();
+            Volatile.Write(ref _intStatus, (int)status);
 
-            lock (lockGate!) // wait OnCompleted.
-            {
-                if (_singleContinuation != null)
-                    try { _singleContinuation(_singleState); }
+            if (_singleContinuation != null)
+                try { _singleContinuation(_singleState); }
+                catch (Exception ex) { GDTaskExceptionHandler.PublishUnobservedTaskException(ex); }
+
+            if (_secondaryContinuationList != null)
+                foreach (var (continuation, continuationState) in _secondaryContinuationList)
+                    try { continuation(continuationState); }
                     catch (Exception ex) { GDTaskExceptionHandler.PublishUnobservedTaskException(ex); }
 
-                if (_secondaryContinuationList != null)
-                    foreach (var (c, state) in _secondaryContinuationList)
-                        try { c(state); }
-                        catch (Exception ex) { GDTaskExceptionHandler.PublishUnobservedTaskException(ex); }
-
-                _singleContinuation = null;
-                _singleState = null;
-                _secondaryContinuationList = null;
-            }
+            _singleContinuation = null;
+            _singleState = null;
+            _secondaryContinuationList = null;
 
             return true;
         }
-
-        return false;
     }
 }
