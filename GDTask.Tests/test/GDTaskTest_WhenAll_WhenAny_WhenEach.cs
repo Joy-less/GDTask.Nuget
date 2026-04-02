@@ -64,7 +64,215 @@ public class GDTaskTest_WhenAll_WhenAny_WhenEach
         var (resultA, resultB) = await GDTask.WhenAll(Constants.DelayWithReturn(), GDTask.FromResult(Constants.ReturnValue));
         Assertions.AssertThat(resultA).IsEqual(Constants.ReturnValue);
         Assertions.AssertThat(resultB).IsEqual(Constants.ReturnValue);
-    }   
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenAll_EmptyInputs_CompleteImmediately()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        await GDTask.WhenAll(Array.Empty<GDTask>());
+
+        var genericResults = await GDTask.WhenAll(Array.Empty<GDTask<int>>());
+        Assertions.AssertThat(genericResults).IsNotNull();
+        Assertions.AssertThat(genericResults.Length).IsEqual(0);
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenAllT_AllSuccess_PreservesInputOrder()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        var results = await GDTask.WhenAll(new[]
+        {
+            GDTask.DelayFrame(3).ContinueWith(() => 3),
+            GDTask.DelayFrame(1).ContinueWith(() => 1),
+            GDTask.DelayFrame(2).ContinueWith(() => 2),
+        });
+
+        Assertions.AssertThat(results).ContainsExactly(new[] { 3, 1, 2 });
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenAll_WaitsForRemainingTasksAfterFault()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        var faulted = new GDTaskCompletionSource();
+        var delayed = new GDTaskCompletionSource();
+        var combinedTask = GDTask.WhenAll(faulted.Task, delayed.Task);
+
+        faulted.TrySetException(new ExpectedException());
+        await GDTask.DelayFrame(1);
+
+        Assertions.AssertThat(combinedTask.Status).IsEqual(GDTaskStatus.Pending);
+
+        delayed.TrySetResult();
+
+        try
+        {
+            await combinedTask;
+            throw new TestFailedException("ExpectedException not thrown");
+        }
+        catch (ExpectedException)
+        {
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenAllT_WaitsForRemainingTasksAfterFault()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        var faulted = new GDTaskCompletionSource<int>();
+        var delayed = new GDTaskCompletionSource<int>();
+        var combinedTask = GDTask.WhenAll(faulted.Task, delayed.Task);
+
+        faulted.TrySetException(new ExpectedException());
+        await GDTask.DelayFrame(1);
+
+        Assertions.AssertThat(combinedTask.Status).IsEqual(GDTaskStatus.Pending);
+
+        delayed.TrySetResult(42);
+
+        try
+        {
+            await combinedTask;
+            throw new TestFailedException("ExpectedException not thrown");
+        }
+        catch (ExpectedException)
+        {
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenAll_SingleFault_PropagatesAfterAllComplete()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        var delayed = new GDTaskCompletionSource();
+        var combinedTask = GDTask.WhenAll(GDTask.FromException(new ExpectedException()), delayed.Task);
+
+        await GDTask.DelayFrame(1);
+        Assertions.AssertThat(combinedTask.Status).IsEqual(GDTaskStatus.Pending);
+
+        delayed.TrySetResult();
+
+        try
+        {
+            await combinedTask;
+            throw new TestFailedException("ExpectedException not thrown");
+        }
+        catch (ExpectedException)
+        {
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenAll_MultipleFaults_AggregatesExceptions()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        var delayed = new GDTaskCompletionSource();
+        var exceptionA = new ExpectedException();
+        var exceptionB = new InvalidOperationException("boom");
+        var combinedTask = GDTask.WhenAll(GDTask.FromException(exceptionA), delayed.Task, GDTask.FromException(exceptionB));
+
+        await GDTask.DelayFrame(1);
+        Assertions.AssertThat(combinedTask.Status).IsEqual(GDTaskStatus.Pending);
+
+        delayed.TrySetResult();
+
+        try
+        {
+            await combinedTask;
+            throw new TestFailedException("AggregateException not thrown");
+        }
+        catch (AggregateException ex)
+        {
+            Assertions.AssertThat(ex.InnerExceptions.Count).IsEqual(2);
+            Assertions.AssertThat(ex.InnerExceptions[0]).IsSame(exceptionA);
+            Assertions.AssertThat(ex.InnerExceptions[1]).IsSame(exceptionB);
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenAll_Cancellation_WaitsForAllAndCancels()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var delayed = new GDTaskCompletionSource();
+        var combinedTask = GDTask.WhenAll(GDTask.FromCanceled(cancellationTokenSource.Token), delayed.Task);
+
+        await GDTask.DelayFrame(1);
+        Assertions.AssertThat(combinedTask.Status).IsEqual(GDTaskStatus.Pending);
+
+        delayed.TrySetResult();
+
+        try
+        {
+            await combinedTask;
+            throw new TestFailedException("OperationCanceledException not thrown");
+        }
+        catch (OperationCanceledException ex)
+        {
+            Assertions.AssertThat(ex.CancellationToken).IsEqual(cancellationTokenSource.Token);
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenAll_FaultTakesPrecedenceOverCancellation()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var delayed = new GDTaskCompletionSource();
+        var combinedTask = GDTask.WhenAll(
+            GDTask.FromCanceled(cancellationTokenSource.Token),
+            GDTask.FromException(new ExpectedException()),
+            delayed.Task);
+
+        await GDTask.DelayFrame(1);
+        Assertions.AssertThat(combinedTask.Status).IsEqual(GDTaskStatus.Pending);
+
+        delayed.TrySetResult();
+
+        try
+        {
+            await combinedTask;
+            throw new TestFailedException("ExpectedException not thrown");
+        }
+        catch (ExpectedException)
+        {
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenAllT_TupleFault_WaitsForAllAndPropagates()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        var faulted = new GDTaskCompletionSource<int>();
+        var delayed = new GDTaskCompletionSource<int>();
+        var combinedTask = GDTask.WhenAll(faulted.Task, delayed.Task);
+
+        faulted.TrySetException(new ExpectedException());
+        await GDTask.DelayFrame(1);
+
+        Assertions.AssertThat(combinedTask.Status).IsEqual(GDTaskStatus.Pending);
+
+        delayed.TrySetResult(7);
+
+        try
+        {
+            await combinedTask;
+            throw new TestFailedException("ExpectedException not thrown");
+        }
+        catch (ExpectedException)
+        {
+        }
+    }
     
     [TestCase, RequireGodotRuntime]
     public static async Task GDTask_WhenAny_Params()

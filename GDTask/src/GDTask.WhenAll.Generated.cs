@@ -12,14 +12,18 @@ namespace GodotTask
         /// Creates a task that will complete when all of the supplied tasks have completed.
         /// </summary>
         /// <returns>A task that represents the completion of all of the supplied tasks.</returns>
-        public static GDTask<(T1, T2)> WhenAll<T1, T2>(GDTask<T1> task1, GDTask<T2> task2)
+        public static async GDTask<(T1, T2)> WhenAll<T1, T2>(GDTask<T1> task1, GDTask<T2> task2)
         {
             if (task1.Status.IsCompletedSuccessfully() && task2.Status.IsCompletedSuccessfully())
             {
-                return new GDTask<(T1, T2)>((task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult()));
+                return (task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult());
             }
 
-            return new GDTask<(T1, T2)>(new WhenAllPromise<T1, T2>(task1, task2), 0);
+            var observation1 = new WhenAllObservation<T1>();
+            var observation2 = new WhenAllObservation<T2>();
+            await WhenAll(new GDTask[] { ObserveWhenAll(task1, observation1), ObserveWhenAll(task2, observation2) });
+            CompleteObservedWhenAll(new IWhenAllObservation[] { observation1, observation2 });
+            return (observation1.Result, observation2.Result);
         }
 
         sealed class WhenAllPromise<T1, T2> : IGDTaskSource<(T1, T2)>
@@ -136,14 +140,19 @@ namespace GodotTask
         }
 
         /// <inheritdoc cref="WhenAll{T1,T2}"/>
-        public static GDTask<(T1, T2, T3)> WhenAll<T1, T2, T3>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3)
+        public static async GDTask<(T1, T2, T3)> WhenAll<T1, T2, T3>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3)
         {
             if (task1.Status.IsCompletedSuccessfully() && task2.Status.IsCompletedSuccessfully() && task3.Status.IsCompletedSuccessfully())
             {
-                return new GDTask<(T1, T2, T3)>((task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult()));
+                return (task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult());
             }
 
-            return new GDTask<(T1, T2, T3)>(new WhenAllPromise<T1, T2, T3>(task1, task2, task3), 0);
+            var observation1 = new WhenAllObservation<T1>();
+            var observation2 = new WhenAllObservation<T2>();
+            var observation3 = new WhenAllObservation<T3>();
+            await WhenAll(new GDTask[] { ObserveWhenAll(task1, observation1), ObserveWhenAll(task2, observation2), ObserveWhenAll(task3, observation3) });
+            CompleteObservedWhenAll(new IWhenAllObservation[] { observation1, observation2, observation3 });
+            return (observation1.Result, observation2.Result, observation3.Result);
         }
 
         sealed class WhenAllPromise<T1, T2, T3> : IGDTaskSource<(T1, T2, T3)>
@@ -296,14 +305,20 @@ namespace GodotTask
         }
 
         /// <inheritdoc cref="WhenAll{T1,T2}"/>
-        public static GDTask<(T1, T2, T3, T4)> WhenAll<T1, T2, T3, T4>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4)
+        public static async GDTask<(T1, T2, T3, T4)> WhenAll<T1, T2, T3, T4>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4)
         {
             if (task1.Status.IsCompletedSuccessfully() && task2.Status.IsCompletedSuccessfully() && task3.Status.IsCompletedSuccessfully() && task4.Status.IsCompletedSuccessfully())
             {
-                return new GDTask<(T1, T2, T3, T4)>((task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult()));
+                return (task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult());
             }
 
-            return new GDTask<(T1, T2, T3, T4)>(new WhenAllPromise<T1, T2, T3, T4>(task1, task2, task3, task4), 0);
+            var observation1 = new WhenAllObservation<T1>();
+            var observation2 = new WhenAllObservation<T2>();
+            var observation3 = new WhenAllObservation<T3>();
+            var observation4 = new WhenAllObservation<T4>();
+            await WhenAll(new GDTask[] { ObserveWhenAll(task1, observation1), ObserveWhenAll(task2, observation2), ObserveWhenAll(task3, observation3), ObserveWhenAll(task4, observation4) });
+            CompleteObservedWhenAll(new IWhenAllObservation[] { observation1, observation2, observation3, observation4 });
+            return (observation1.Result, observation2.Result, observation3.Result, observation4.Result);
         }
 
         sealed class WhenAllPromise<T1, T2, T3, T4> : IGDTaskSource<(T1, T2, T3, T4)>
@@ -492,14 +507,21 @@ namespace GodotTask
         }
 
         /// <inheritdoc cref="WhenAll{T1,T2}"/>
-        public static GDTask<(T1, T2, T3, T4, T5)> WhenAll<T1, T2, T3, T4, T5>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5)
+        public static async GDTask<(T1, T2, T3, T4, T5)> WhenAll<T1, T2, T3, T4, T5>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5)
         {
             if (task1.Status.IsCompletedSuccessfully() && task2.Status.IsCompletedSuccessfully() && task3.Status.IsCompletedSuccessfully() && task4.Status.IsCompletedSuccessfully() && task5.Status.IsCompletedSuccessfully())
             {
-                return new GDTask<(T1, T2, T3, T4, T5)>((task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult()));
+                return (task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult());
             }
 
-            return new GDTask<(T1, T2, T3, T4, T5)>(new WhenAllPromise<T1, T2, T3, T4, T5>(task1, task2, task3, task4, task5), 0);
+            var observation1 = new WhenAllObservation<T1>();
+            var observation2 = new WhenAllObservation<T2>();
+            var observation3 = new WhenAllObservation<T3>();
+            var observation4 = new WhenAllObservation<T4>();
+            var observation5 = new WhenAllObservation<T5>();
+            await WhenAll(new GDTask[] { ObserveWhenAll(task1, observation1), ObserveWhenAll(task2, observation2), ObserveWhenAll(task3, observation3), ObserveWhenAll(task4, observation4), ObserveWhenAll(task5, observation5) });
+            CompleteObservedWhenAll(new IWhenAllObservation[] { observation1, observation2, observation3, observation4, observation5 });
+            return (observation1.Result, observation2.Result, observation3.Result, observation4.Result, observation5.Result);
         }
 
         sealed class WhenAllPromise<T1, T2, T3, T4, T5> : IGDTaskSource<(T1, T2, T3, T4, T5)>
@@ -724,14 +746,22 @@ namespace GodotTask
         }
 
         /// <inheritdoc cref="WhenAll{T1,T2}"/>
-        public static GDTask<(T1, T2, T3, T4, T5, T6)> WhenAll<T1, T2, T3, T4, T5, T6>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6)
+        public static async GDTask<(T1, T2, T3, T4, T5, T6)> WhenAll<T1, T2, T3, T4, T5, T6>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6)
         {
             if (task1.Status.IsCompletedSuccessfully() && task2.Status.IsCompletedSuccessfully() && task3.Status.IsCompletedSuccessfully() && task4.Status.IsCompletedSuccessfully() && task5.Status.IsCompletedSuccessfully() && task6.Status.IsCompletedSuccessfully())
             {
-                return new GDTask<(T1, T2, T3, T4, T5, T6)>((task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult()));
+                return (task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult());
             }
 
-            return new GDTask<(T1, T2, T3, T4, T5, T6)>(new WhenAllPromise<T1, T2, T3, T4, T5, T6>(task1, task2, task3, task4, task5, task6), 0);
+            var observation1 = new WhenAllObservation<T1>();
+            var observation2 = new WhenAllObservation<T2>();
+            var observation3 = new WhenAllObservation<T3>();
+            var observation4 = new WhenAllObservation<T4>();
+            var observation5 = new WhenAllObservation<T5>();
+            var observation6 = new WhenAllObservation<T6>();
+            await WhenAll(new GDTask[] { ObserveWhenAll(task1, observation1), ObserveWhenAll(task2, observation2), ObserveWhenAll(task3, observation3), ObserveWhenAll(task4, observation4), ObserveWhenAll(task5, observation5), ObserveWhenAll(task6, observation6) });
+            CompleteObservedWhenAll(new IWhenAllObservation[] { observation1, observation2, observation3, observation4, observation5, observation6 });
+            return (observation1.Result, observation2.Result, observation3.Result, observation4.Result, observation5.Result, observation6.Result);
         }
 
         sealed class WhenAllPromise<T1, T2, T3, T4, T5, T6> : IGDTaskSource<(T1, T2, T3, T4, T5, T6)>
@@ -992,14 +1022,23 @@ namespace GodotTask
         }
 
         /// <inheritdoc cref="WhenAll{T1,T2}"/>
-        public static GDTask<(T1, T2, T3, T4, T5, T6, T7)> WhenAll<T1, T2, T3, T4, T5, T6, T7>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7)
+        public static async GDTask<(T1, T2, T3, T4, T5, T6, T7)> WhenAll<T1, T2, T3, T4, T5, T6, T7>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7)
         {
             if (task1.Status.IsCompletedSuccessfully() && task2.Status.IsCompletedSuccessfully() && task3.Status.IsCompletedSuccessfully() && task4.Status.IsCompletedSuccessfully() && task5.Status.IsCompletedSuccessfully() && task6.Status.IsCompletedSuccessfully() && task7.Status.IsCompletedSuccessfully())
             {
-                return new GDTask<(T1, T2, T3, T4, T5, T6, T7)>((task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult()));
+                return (task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult());
             }
 
-            return new GDTask<(T1, T2, T3, T4, T5, T6, T7)>(new WhenAllPromise<T1, T2, T3, T4, T5, T6, T7>(task1, task2, task3, task4, task5, task6, task7), 0);
+            var observation1 = new WhenAllObservation<T1>();
+            var observation2 = new WhenAllObservation<T2>();
+            var observation3 = new WhenAllObservation<T3>();
+            var observation4 = new WhenAllObservation<T4>();
+            var observation5 = new WhenAllObservation<T5>();
+            var observation6 = new WhenAllObservation<T6>();
+            var observation7 = new WhenAllObservation<T7>();
+            await WhenAll(new GDTask[] { ObserveWhenAll(task1, observation1), ObserveWhenAll(task2, observation2), ObserveWhenAll(task3, observation3), ObserveWhenAll(task4, observation4), ObserveWhenAll(task5, observation5), ObserveWhenAll(task6, observation6), ObserveWhenAll(task7, observation7) });
+            CompleteObservedWhenAll(new IWhenAllObservation[] { observation1, observation2, observation3, observation4, observation5, observation6, observation7 });
+            return (observation1.Result, observation2.Result, observation3.Result, observation4.Result, observation5.Result, observation6.Result, observation7.Result);
         }
 
         sealed class WhenAllPromise<T1, T2, T3, T4, T5, T6, T7> : IGDTaskSource<(T1, T2, T3, T4, T5, T6, T7)>
@@ -1296,14 +1335,24 @@ namespace GodotTask
         }
 
         /// <inheritdoc cref="WhenAll{T1,T2}"/>
-        public static GDTask<(T1, T2, T3, T4, T5, T6, T7, T8)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8)
+        public static async GDTask<(T1, T2, T3, T4, T5, T6, T7, T8)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8)
         {
             if (task1.Status.IsCompletedSuccessfully() && task2.Status.IsCompletedSuccessfully() && task3.Status.IsCompletedSuccessfully() && task4.Status.IsCompletedSuccessfully() && task5.Status.IsCompletedSuccessfully() && task6.Status.IsCompletedSuccessfully() && task7.Status.IsCompletedSuccessfully() && task8.Status.IsCompletedSuccessfully())
             {
-                return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8)>((task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult()));
+                return (task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult());
             }
 
-            return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8)>(new WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8>(task1, task2, task3, task4, task5, task6, task7, task8), 0);
+            var observation1 = new WhenAllObservation<T1>();
+            var observation2 = new WhenAllObservation<T2>();
+            var observation3 = new WhenAllObservation<T3>();
+            var observation4 = new WhenAllObservation<T4>();
+            var observation5 = new WhenAllObservation<T5>();
+            var observation6 = new WhenAllObservation<T6>();
+            var observation7 = new WhenAllObservation<T7>();
+            var observation8 = new WhenAllObservation<T8>();
+            await WhenAll(new GDTask[] { ObserveWhenAll(task1, observation1), ObserveWhenAll(task2, observation2), ObserveWhenAll(task3, observation3), ObserveWhenAll(task4, observation4), ObserveWhenAll(task5, observation5), ObserveWhenAll(task6, observation6), ObserveWhenAll(task7, observation7), ObserveWhenAll(task8, observation8) });
+            CompleteObservedWhenAll(new IWhenAllObservation[] { observation1, observation2, observation3, observation4, observation5, observation6, observation7, observation8 });
+            return (observation1.Result, observation2.Result, observation3.Result, observation4.Result, observation5.Result, observation6.Result, observation7.Result, observation8.Result);
         }
 
         sealed class WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8> : IGDTaskSource<(T1, T2, T3, T4, T5, T6, T7, T8)>
@@ -1636,14 +1685,25 @@ namespace GodotTask
         }
 
         /// <inheritdoc cref="WhenAll{T1,T2}"/>
-        public static GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8, T9>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9)
+        public static async GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8, T9>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9)
         {
             if (task1.Status.IsCompletedSuccessfully() && task2.Status.IsCompletedSuccessfully() && task3.Status.IsCompletedSuccessfully() && task4.Status.IsCompletedSuccessfully() && task5.Status.IsCompletedSuccessfully() && task6.Status.IsCompletedSuccessfully() && task7.Status.IsCompletedSuccessfully() && task8.Status.IsCompletedSuccessfully() && task9.Status.IsCompletedSuccessfully())
             {
-                return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9)>((task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult(), task9.GetAwaiter().GetResult()));
+                return (task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult(), task9.GetAwaiter().GetResult());
             }
 
-            return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9)>(new WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9>(task1, task2, task3, task4, task5, task6, task7, task8, task9), 0);
+            var observation1 = new WhenAllObservation<T1>();
+            var observation2 = new WhenAllObservation<T2>();
+            var observation3 = new WhenAllObservation<T3>();
+            var observation4 = new WhenAllObservation<T4>();
+            var observation5 = new WhenAllObservation<T5>();
+            var observation6 = new WhenAllObservation<T6>();
+            var observation7 = new WhenAllObservation<T7>();
+            var observation8 = new WhenAllObservation<T8>();
+            var observation9 = new WhenAllObservation<T9>();
+            await WhenAll(new GDTask[] { ObserveWhenAll(task1, observation1), ObserveWhenAll(task2, observation2), ObserveWhenAll(task3, observation3), ObserveWhenAll(task4, observation4), ObserveWhenAll(task5, observation5), ObserveWhenAll(task6, observation6), ObserveWhenAll(task7, observation7), ObserveWhenAll(task8, observation8), ObserveWhenAll(task9, observation9) });
+            CompleteObservedWhenAll(new IWhenAllObservation[] { observation1, observation2, observation3, observation4, observation5, observation6, observation7, observation8, observation9 });
+            return (observation1.Result, observation2.Result, observation3.Result, observation4.Result, observation5.Result, observation6.Result, observation7.Result, observation8.Result, observation9.Result);
         }
 
         sealed class WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9> : IGDTaskSource<(T1, T2, T3, T4, T5, T6, T7, T8, T9)>
@@ -2012,14 +2072,26 @@ namespace GodotTask
         }
 
         /// <inheritdoc cref="WhenAll{T1,T2}"/>
-        public static GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10)
+        public static async GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10)
         {
             if (task1.Status.IsCompletedSuccessfully() && task2.Status.IsCompletedSuccessfully() && task3.Status.IsCompletedSuccessfully() && task4.Status.IsCompletedSuccessfully() && task5.Status.IsCompletedSuccessfully() && task6.Status.IsCompletedSuccessfully() && task7.Status.IsCompletedSuccessfully() && task8.Status.IsCompletedSuccessfully() && task9.Status.IsCompletedSuccessfully() && task10.Status.IsCompletedSuccessfully())
             {
-                return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)>((task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult(), task9.GetAwaiter().GetResult(), task10.GetAwaiter().GetResult()));
+                return (task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult(), task9.GetAwaiter().GetResult(), task10.GetAwaiter().GetResult());
             }
 
-            return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)>(new WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10), 0);
+            var observation1 = new WhenAllObservation<T1>();
+            var observation2 = new WhenAllObservation<T2>();
+            var observation3 = new WhenAllObservation<T3>();
+            var observation4 = new WhenAllObservation<T4>();
+            var observation5 = new WhenAllObservation<T5>();
+            var observation6 = new WhenAllObservation<T6>();
+            var observation7 = new WhenAllObservation<T7>();
+            var observation8 = new WhenAllObservation<T8>();
+            var observation9 = new WhenAllObservation<T9>();
+            var observation10 = new WhenAllObservation<T10>();
+            await WhenAll(new GDTask[] { ObserveWhenAll(task1, observation1), ObserveWhenAll(task2, observation2), ObserveWhenAll(task3, observation3), ObserveWhenAll(task4, observation4), ObserveWhenAll(task5, observation5), ObserveWhenAll(task6, observation6), ObserveWhenAll(task7, observation7), ObserveWhenAll(task8, observation8), ObserveWhenAll(task9, observation9), ObserveWhenAll(task10, observation10) });
+            CompleteObservedWhenAll(new IWhenAllObservation[] { observation1, observation2, observation3, observation4, observation5, observation6, observation7, observation8, observation9, observation10 });
+            return (observation1.Result, observation2.Result, observation3.Result, observation4.Result, observation5.Result, observation6.Result, observation7.Result, observation8.Result, observation9.Result, observation10.Result);
         }
 
         sealed class WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> : IGDTaskSource<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10)>
@@ -2424,14 +2496,27 @@ namespace GodotTask
         }
 
         /// <inheritdoc cref="WhenAll{T1,T2}"/>
-        public static GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11)
+        public static async GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11)
         {
             if (task1.Status.IsCompletedSuccessfully() && task2.Status.IsCompletedSuccessfully() && task3.Status.IsCompletedSuccessfully() && task4.Status.IsCompletedSuccessfully() && task5.Status.IsCompletedSuccessfully() && task6.Status.IsCompletedSuccessfully() && task7.Status.IsCompletedSuccessfully() && task8.Status.IsCompletedSuccessfully() && task9.Status.IsCompletedSuccessfully() && task10.Status.IsCompletedSuccessfully() && task11.Status.IsCompletedSuccessfully())
             {
-                return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11)>((task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult(), task9.GetAwaiter().GetResult(), task10.GetAwaiter().GetResult(), task11.GetAwaiter().GetResult()));
+                return (task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult(), task9.GetAwaiter().GetResult(), task10.GetAwaiter().GetResult(), task11.GetAwaiter().GetResult());
             }
 
-            return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11)>(new WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11), 0);
+            var observation1 = new WhenAllObservation<T1>();
+            var observation2 = new WhenAllObservation<T2>();
+            var observation3 = new WhenAllObservation<T3>();
+            var observation4 = new WhenAllObservation<T4>();
+            var observation5 = new WhenAllObservation<T5>();
+            var observation6 = new WhenAllObservation<T6>();
+            var observation7 = new WhenAllObservation<T7>();
+            var observation8 = new WhenAllObservation<T8>();
+            var observation9 = new WhenAllObservation<T9>();
+            var observation10 = new WhenAllObservation<T10>();
+            var observation11 = new WhenAllObservation<T11>();
+            await WhenAll(new GDTask[] { ObserveWhenAll(task1, observation1), ObserveWhenAll(task2, observation2), ObserveWhenAll(task3, observation3), ObserveWhenAll(task4, observation4), ObserveWhenAll(task5, observation5), ObserveWhenAll(task6, observation6), ObserveWhenAll(task7, observation7), ObserveWhenAll(task8, observation8), ObserveWhenAll(task9, observation9), ObserveWhenAll(task10, observation10), ObserveWhenAll(task11, observation11) });
+            CompleteObservedWhenAll(new IWhenAllObservation[] { observation1, observation2, observation3, observation4, observation5, observation6, observation7, observation8, observation9, observation10, observation11 });
+            return (observation1.Result, observation2.Result, observation3.Result, observation4.Result, observation5.Result, observation6.Result, observation7.Result, observation8.Result, observation9.Result, observation10.Result, observation11.Result);
         }
 
         sealed class WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> : IGDTaskSource<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11)>
@@ -2872,14 +2957,28 @@ namespace GodotTask
         }
 
         /// <inheritdoc cref="WhenAll{T1,T2}"/>
-        public static GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11, GDTask<T12> task12)
+        public static async GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11, GDTask<T12> task12)
         {
             if (task1.Status.IsCompletedSuccessfully() && task2.Status.IsCompletedSuccessfully() && task3.Status.IsCompletedSuccessfully() && task4.Status.IsCompletedSuccessfully() && task5.Status.IsCompletedSuccessfully() && task6.Status.IsCompletedSuccessfully() && task7.Status.IsCompletedSuccessfully() && task8.Status.IsCompletedSuccessfully() && task9.Status.IsCompletedSuccessfully() && task10.Status.IsCompletedSuccessfully() && task11.Status.IsCompletedSuccessfully() && task12.Status.IsCompletedSuccessfully())
             {
-                return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12)>((task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult(), task9.GetAwaiter().GetResult(), task10.GetAwaiter().GetResult(), task11.GetAwaiter().GetResult(), task12.GetAwaiter().GetResult()));
+                return (task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult(), task9.GetAwaiter().GetResult(), task10.GetAwaiter().GetResult(), task11.GetAwaiter().GetResult(), task12.GetAwaiter().GetResult());
             }
 
-            return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12)>(new WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11, task12), 0);
+            var observation1 = new WhenAllObservation<T1>();
+            var observation2 = new WhenAllObservation<T2>();
+            var observation3 = new WhenAllObservation<T3>();
+            var observation4 = new WhenAllObservation<T4>();
+            var observation5 = new WhenAllObservation<T5>();
+            var observation6 = new WhenAllObservation<T6>();
+            var observation7 = new WhenAllObservation<T7>();
+            var observation8 = new WhenAllObservation<T8>();
+            var observation9 = new WhenAllObservation<T9>();
+            var observation10 = new WhenAllObservation<T10>();
+            var observation11 = new WhenAllObservation<T11>();
+            var observation12 = new WhenAllObservation<T12>();
+            await WhenAll(new GDTask[] { ObserveWhenAll(task1, observation1), ObserveWhenAll(task2, observation2), ObserveWhenAll(task3, observation3), ObserveWhenAll(task4, observation4), ObserveWhenAll(task5, observation5), ObserveWhenAll(task6, observation6), ObserveWhenAll(task7, observation7), ObserveWhenAll(task8, observation8), ObserveWhenAll(task9, observation9), ObserveWhenAll(task10, observation10), ObserveWhenAll(task11, observation11), ObserveWhenAll(task12, observation12) });
+            CompleteObservedWhenAll(new IWhenAllObservation[] { observation1, observation2, observation3, observation4, observation5, observation6, observation7, observation8, observation9, observation10, observation11, observation12 });
+            return (observation1.Result, observation2.Result, observation3.Result, observation4.Result, observation5.Result, observation6.Result, observation7.Result, observation8.Result, observation9.Result, observation10.Result, observation11.Result, observation12.Result);
         }
 
         sealed class WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> : IGDTaskSource<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12)>
@@ -3356,14 +3455,29 @@ namespace GodotTask
         }
 
         /// <inheritdoc cref="WhenAll{T1,T2}"/>
-        public static GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11, GDTask<T12> task12, GDTask<T13> task13)
+        public static async GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11, GDTask<T12> task12, GDTask<T13> task13)
         {
             if (task1.Status.IsCompletedSuccessfully() && task2.Status.IsCompletedSuccessfully() && task3.Status.IsCompletedSuccessfully() && task4.Status.IsCompletedSuccessfully() && task5.Status.IsCompletedSuccessfully() && task6.Status.IsCompletedSuccessfully() && task7.Status.IsCompletedSuccessfully() && task8.Status.IsCompletedSuccessfully() && task9.Status.IsCompletedSuccessfully() && task10.Status.IsCompletedSuccessfully() && task11.Status.IsCompletedSuccessfully() && task12.Status.IsCompletedSuccessfully() && task13.Status.IsCompletedSuccessfully())
             {
-                return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13)>((task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult(), task9.GetAwaiter().GetResult(), task10.GetAwaiter().GetResult(), task11.GetAwaiter().GetResult(), task12.GetAwaiter().GetResult(), task13.GetAwaiter().GetResult()));
+                return (task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult(), task9.GetAwaiter().GetResult(), task10.GetAwaiter().GetResult(), task11.GetAwaiter().GetResult(), task12.GetAwaiter().GetResult(), task13.GetAwaiter().GetResult());
             }
 
-            return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13)>(new WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11, task12, task13), 0);
+            var observation1 = new WhenAllObservation<T1>();
+            var observation2 = new WhenAllObservation<T2>();
+            var observation3 = new WhenAllObservation<T3>();
+            var observation4 = new WhenAllObservation<T4>();
+            var observation5 = new WhenAllObservation<T5>();
+            var observation6 = new WhenAllObservation<T6>();
+            var observation7 = new WhenAllObservation<T7>();
+            var observation8 = new WhenAllObservation<T8>();
+            var observation9 = new WhenAllObservation<T9>();
+            var observation10 = new WhenAllObservation<T10>();
+            var observation11 = new WhenAllObservation<T11>();
+            var observation12 = new WhenAllObservation<T12>();
+            var observation13 = new WhenAllObservation<T13>();
+            await WhenAll(new GDTask[] { ObserveWhenAll(task1, observation1), ObserveWhenAll(task2, observation2), ObserveWhenAll(task3, observation3), ObserveWhenAll(task4, observation4), ObserveWhenAll(task5, observation5), ObserveWhenAll(task6, observation6), ObserveWhenAll(task7, observation7), ObserveWhenAll(task8, observation8), ObserveWhenAll(task9, observation9), ObserveWhenAll(task10, observation10), ObserveWhenAll(task11, observation11), ObserveWhenAll(task12, observation12), ObserveWhenAll(task13, observation13) });
+            CompleteObservedWhenAll(new IWhenAllObservation[] { observation1, observation2, observation3, observation4, observation5, observation6, observation7, observation8, observation9, observation10, observation11, observation12, observation13 });
+            return (observation1.Result, observation2.Result, observation3.Result, observation4.Result, observation5.Result, observation6.Result, observation7.Result, observation8.Result, observation9.Result, observation10.Result, observation11.Result, observation12.Result, observation13.Result);
         }
 
         sealed class WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> : IGDTaskSource<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13)>
@@ -3876,14 +3990,30 @@ namespace GodotTask
         }
 
         /// <inheritdoc cref="WhenAll{T1,T2}"/>
-        public static GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11, GDTask<T12> task12, GDTask<T13> task13, GDTask<T14> task14)
+        public static async GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11, GDTask<T12> task12, GDTask<T13> task13, GDTask<T14> task14)
         {
             if (task1.Status.IsCompletedSuccessfully() && task2.Status.IsCompletedSuccessfully() && task3.Status.IsCompletedSuccessfully() && task4.Status.IsCompletedSuccessfully() && task5.Status.IsCompletedSuccessfully() && task6.Status.IsCompletedSuccessfully() && task7.Status.IsCompletedSuccessfully() && task8.Status.IsCompletedSuccessfully() && task9.Status.IsCompletedSuccessfully() && task10.Status.IsCompletedSuccessfully() && task11.Status.IsCompletedSuccessfully() && task12.Status.IsCompletedSuccessfully() && task13.Status.IsCompletedSuccessfully() && task14.Status.IsCompletedSuccessfully())
             {
-                return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14)>((task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult(), task9.GetAwaiter().GetResult(), task10.GetAwaiter().GetResult(), task11.GetAwaiter().GetResult(), task12.GetAwaiter().GetResult(), task13.GetAwaiter().GetResult(), task14.GetAwaiter().GetResult()));
+                return (task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult(), task9.GetAwaiter().GetResult(), task10.GetAwaiter().GetResult(), task11.GetAwaiter().GetResult(), task12.GetAwaiter().GetResult(), task13.GetAwaiter().GetResult(), task14.GetAwaiter().GetResult());
             }
 
-            return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14)>(new WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11, task12, task13, task14), 0);
+            var observation1 = new WhenAllObservation<T1>();
+            var observation2 = new WhenAllObservation<T2>();
+            var observation3 = new WhenAllObservation<T3>();
+            var observation4 = new WhenAllObservation<T4>();
+            var observation5 = new WhenAllObservation<T5>();
+            var observation6 = new WhenAllObservation<T6>();
+            var observation7 = new WhenAllObservation<T7>();
+            var observation8 = new WhenAllObservation<T8>();
+            var observation9 = new WhenAllObservation<T9>();
+            var observation10 = new WhenAllObservation<T10>();
+            var observation11 = new WhenAllObservation<T11>();
+            var observation12 = new WhenAllObservation<T12>();
+            var observation13 = new WhenAllObservation<T13>();
+            var observation14 = new WhenAllObservation<T14>();
+            await WhenAll(new GDTask[] { ObserveWhenAll(task1, observation1), ObserveWhenAll(task2, observation2), ObserveWhenAll(task3, observation3), ObserveWhenAll(task4, observation4), ObserveWhenAll(task5, observation5), ObserveWhenAll(task6, observation6), ObserveWhenAll(task7, observation7), ObserveWhenAll(task8, observation8), ObserveWhenAll(task9, observation9), ObserveWhenAll(task10, observation10), ObserveWhenAll(task11, observation11), ObserveWhenAll(task12, observation12), ObserveWhenAll(task13, observation13), ObserveWhenAll(task14, observation14) });
+            CompleteObservedWhenAll(new IWhenAllObservation[] { observation1, observation2, observation3, observation4, observation5, observation6, observation7, observation8, observation9, observation10, observation11, observation12, observation13, observation14 });
+            return (observation1.Result, observation2.Result, observation3.Result, observation4.Result, observation5.Result, observation6.Result, observation7.Result, observation8.Result, observation9.Result, observation10.Result, observation11.Result, observation12.Result, observation13.Result, observation14.Result);
         }
 
         sealed class WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> : IGDTaskSource<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14)>
@@ -4432,14 +4562,31 @@ namespace GodotTask
         }
 
         /// <inheritdoc cref="WhenAll{T1,T2}"/>
-        public static GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11, GDTask<T12> task12, GDTask<T13> task13, GDTask<T14> task14, GDTask<T15> task15)
+        public static async GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15)> WhenAll<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(GDTask<T1> task1, GDTask<T2> task2, GDTask<T3> task3, GDTask<T4> task4, GDTask<T5> task5, GDTask<T6> task6, GDTask<T7> task7, GDTask<T8> task8, GDTask<T9> task9, GDTask<T10> task10, GDTask<T11> task11, GDTask<T12> task12, GDTask<T13> task13, GDTask<T14> task14, GDTask<T15> task15)
         {
             if (task1.Status.IsCompletedSuccessfully() && task2.Status.IsCompletedSuccessfully() && task3.Status.IsCompletedSuccessfully() && task4.Status.IsCompletedSuccessfully() && task5.Status.IsCompletedSuccessfully() && task6.Status.IsCompletedSuccessfully() && task7.Status.IsCompletedSuccessfully() && task8.Status.IsCompletedSuccessfully() && task9.Status.IsCompletedSuccessfully() && task10.Status.IsCompletedSuccessfully() && task11.Status.IsCompletedSuccessfully() && task12.Status.IsCompletedSuccessfully() && task13.Status.IsCompletedSuccessfully() && task14.Status.IsCompletedSuccessfully() && task15.Status.IsCompletedSuccessfully())
             {
-                return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15)>((task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult(), task9.GetAwaiter().GetResult(), task10.GetAwaiter().GetResult(), task11.GetAwaiter().GetResult(), task12.GetAwaiter().GetResult(), task13.GetAwaiter().GetResult(), task14.GetAwaiter().GetResult(), task15.GetAwaiter().GetResult()));
+                return (task1.GetAwaiter().GetResult(), task2.GetAwaiter().GetResult(), task3.GetAwaiter().GetResult(), task4.GetAwaiter().GetResult(), task5.GetAwaiter().GetResult(), task6.GetAwaiter().GetResult(), task7.GetAwaiter().GetResult(), task8.GetAwaiter().GetResult(), task9.GetAwaiter().GetResult(), task10.GetAwaiter().GetResult(), task11.GetAwaiter().GetResult(), task12.GetAwaiter().GetResult(), task13.GetAwaiter().GetResult(), task14.GetAwaiter().GetResult(), task15.GetAwaiter().GetResult());
             }
 
-            return new GDTask<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15)>(new WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(task1, task2, task3, task4, task5, task6, task7, task8, task9, task10, task11, task12, task13, task14, task15), 0);
+            var observation1 = new WhenAllObservation<T1>();
+            var observation2 = new WhenAllObservation<T2>();
+            var observation3 = new WhenAllObservation<T3>();
+            var observation4 = new WhenAllObservation<T4>();
+            var observation5 = new WhenAllObservation<T5>();
+            var observation6 = new WhenAllObservation<T6>();
+            var observation7 = new WhenAllObservation<T7>();
+            var observation8 = new WhenAllObservation<T8>();
+            var observation9 = new WhenAllObservation<T9>();
+            var observation10 = new WhenAllObservation<T10>();
+            var observation11 = new WhenAllObservation<T11>();
+            var observation12 = new WhenAllObservation<T12>();
+            var observation13 = new WhenAllObservation<T13>();
+            var observation14 = new WhenAllObservation<T14>();
+            var observation15 = new WhenAllObservation<T15>();
+            await WhenAll(new GDTask[] { ObserveWhenAll(task1, observation1), ObserveWhenAll(task2, observation2), ObserveWhenAll(task3, observation3), ObserveWhenAll(task4, observation4), ObserveWhenAll(task5, observation5), ObserveWhenAll(task6, observation6), ObserveWhenAll(task7, observation7), ObserveWhenAll(task8, observation8), ObserveWhenAll(task9, observation9), ObserveWhenAll(task10, observation10), ObserveWhenAll(task11, observation11), ObserveWhenAll(task12, observation12), ObserveWhenAll(task13, observation13), ObserveWhenAll(task14, observation14), ObserveWhenAll(task15, observation15) });
+            CompleteObservedWhenAll(new IWhenAllObservation[] { observation1, observation2, observation3, observation4, observation5, observation6, observation7, observation8, observation9, observation10, observation11, observation12, observation13, observation14, observation15 });
+            return (observation1.Result, observation2.Result, observation3.Result, observation4.Result, observation5.Result, observation6.Result, observation7.Result, observation8.Result, observation9.Result, observation10.Result, observation11.Result, observation12.Result, observation13.Result, observation14.Result, observation15.Result);
         }
 
         sealed class WhenAllPromise<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> : IGDTaskSource<(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15)>
