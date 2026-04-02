@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GdUnit4;
 using Godot;
+using GodotTask.Internal;
 
 namespace GodotTask.Tests;
 
@@ -162,6 +163,71 @@ public class GDTaskTest_WhenAll_WhenAny_WhenEach
         Assertions.AssertThat(counter).IsEqual(3);
         Assertions.AssertThat(frameCount).IsEqual(Engine.GetProcessFrames() - 15);
         Assertions.AssertThat(string.Join(", ", results)).IsEqual("1, 2, 3");
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task Channel_ReadAllAsync_Current_IsStableAcrossRepeatedAccess()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        var channel = Channel.CreateSingleConsumerUnbounded<int>();
+        channel.Writer.TryWrite(1);
+        channel.Writer.TryWrite(2);
+        channel.Writer.TryComplete();
+
+        var enumerator = channel.Reader.ReadAllAsync().GetAsyncEnumerator();
+
+        try
+        {
+            Assertions.AssertThat(await enumerator.MoveNextAsync()).IsTrue();
+            Assertions.AssertThat(enumerator.Current).IsEqual(1);
+            Assertions.AssertThat(enumerator.Current).IsEqual(1);
+
+            Assertions.AssertThat(await enumerator.MoveNextAsync()).IsTrue();
+            Assertions.AssertThat(enumerator.Current).IsEqual(2);
+            Assertions.AssertThat(enumerator.Current).IsEqual(2);
+
+            Assertions.AssertThat(await enumerator.MoveNextAsync()).IsFalse();
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenEachT_RepeatedCurrentAccess_DoesNotLoseItems()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        var enumerator = GDTask.WhenEach((IEnumerable<GDTask<int>>)new[]
+        {
+            GDTask.FromResult(1),
+            GDTask.FromResult(2),
+            GDTask.FromResult(3),
+        }).GetAsyncEnumerator();
+
+        var results = new List<int>();
+
+        try
+        {
+            while (await enumerator.MoveNextAsync())
+            {
+                var firstRead = enumerator.Current;
+                var secondRead = enumerator.Current;
+
+                Assertions.AssertThat(secondRead.GetAwaiter().GetResult())
+                    .IsEqual(firstRead.GetAwaiter().GetResult());
+
+                results.Add(secondRead.GetAwaiter().GetResult());
+            }
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+        }
+
+        Assertions.AssertThat(results.Count).IsEqual(3);
+        Assertions.AssertThat(results.OrderBy(value => value).ToArray())
+            .ContainsExactly(new[] { 1, 2, 3 });
     }
 
     [TestCase, RequireGodotRuntime]

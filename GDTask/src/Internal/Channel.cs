@@ -305,7 +305,12 @@ class SingleConsumerUnboundedChannel<T> : Channel<T>
                 get
                 {
                     if (_cacheValue) return _current;
-                    _parent.TryRead(out _current);
+
+                    if (_parent.TryRead(out _current))
+                    {
+                        _cacheValue = true;
+                    }
+
                     return _current;
                 }
             }
