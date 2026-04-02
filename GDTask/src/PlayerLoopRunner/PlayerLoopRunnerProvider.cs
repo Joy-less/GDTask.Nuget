@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using Godot;
 using GodotTask.Internal;
 
@@ -11,23 +12,19 @@ namespace GodotTask;
 partial class PlayerLoopRunnerProvider : Node
 {
     private static PlayerLoopRunnerProvider? Global;
+    private static int InitializationRequested;
+
+    private static readonly PlayerLoopProxy DeferredProxy = new();
+    private static readonly PlayerLoopProxy IsolatedPhysicsProcessProxy = new();
+    private static readonly PlayerLoopProxy IsolatedProcessProxy = new();
+    private static readonly PlayerLoopProxy PhysicsProcessProxy = new();
+    private static readonly PlayerLoopProxy ProcessProxy = new();
 
     private readonly Variant[] _deferredArgs = new Variant[1];
-    private readonly PlayerLoopProxy _deferredProxy;
-    private readonly PlayerLoopProxy _isolatedPhysicsProcessProxy;
-    private readonly PlayerLoopProxy _isolatedProcessProxy;
-    private readonly PlayerLoopProxy _physicsProcessProxy;
-
-    private readonly PlayerLoopProxy _processProxy;
 
     private PlayerLoopRunnerProvider()
     {
-        _processProxy = new();
-        _physicsProcessProxy = new();
-        _isolatedProcessProxy = new();
-        _isolatedPhysicsProcessProxy = new();
-        _deferredProxy = new();
-        var isolatedPlayerLoopRunner = new IsolatedGDTaskPlayerLoopRunner(_isolatedProcessProxy, _isolatedPhysicsProcessProxy);
+        var isolatedPlayerLoopRunner = new IsolatedGDTaskPlayerLoopRunner(IsolatedProcessProxy, IsolatedPhysicsProcessProxy);
         AddChild(isolatedPlayerLoopRunner);
         isolatedPlayerLoopRunner.Name = "IsolatedGDTaskPlayerLoopRunner";
     }
@@ -36,22 +33,94 @@ partial class PlayerLoopRunnerProvider : Node
     {
         get
         {
-            RuntimeChecker.ThrowIfEditor();
-            if (Global != null) return Global;
-            var newInstance = new PlayerLoopRunnerProvider();
-            var root = ((SceneTree)Engine.GetMainLoop()).Root;
-            root.CallDeferred(Node.MethodName.AddChild, newInstance, false, Variant.From(InternalMode.Front));
-            newInstance.Name = "GDTaskPlayerLoopRunner";
-            Global = newInstance;
-            return Global;
+            EnsureInitialized();
+            return Global ?? throw new InvalidOperationException("Player loop runner provider is pending main-thread initialization.");
         }
     }
 
-    public static IPlayerLoop Process => GlobalInstance._processProxy;
-    public static IPlayerLoop PhysicsProcess => GlobalInstance._physicsProcessProxy;
-    public static IPlayerLoop IsolatedProcess => GlobalInstance._isolatedProcessProxy;
-    public static IPlayerLoop IsolatedPhysicsProcess => GlobalInstance._isolatedPhysicsProcessProxy;
-    public static IPlayerLoop Deferred => GlobalInstance._deferredProxy;
+    public static IPlayerLoop Process
+    {
+        get
+        {
+            EnsureInitialized();
+            return ProcessProxy;
+        }
+    }
+
+    public static IPlayerLoop PhysicsProcess
+    {
+        get
+        {
+            EnsureInitialized();
+            return PhysicsProcessProxy;
+        }
+    }
+
+    public static IPlayerLoop IsolatedProcess
+    {
+        get
+        {
+            EnsureInitialized();
+            return IsolatedProcessProxy;
+        }
+    }
+
+    public static IPlayerLoop IsolatedPhysicsProcess
+    {
+        get
+        {
+            EnsureInitialized();
+            return IsolatedPhysicsProcessProxy;
+        }
+    }
+
+    public static IPlayerLoop Deferred
+    {
+        get
+        {
+            EnsureInitialized();
+            return DeferredProxy;
+        }
+    }
+
+    private static void EnsureInitialized()
+    {
+        RuntimeChecker.ThrowIfEditor();
+        if (Global != null) return;
+
+        if (!GDTaskScheduler.IsMainThread)
+        {
+            RequestMainThreadInitialization();
+            return;
+        }
+
+        CreateGlobalInstance();
+    }
+
+    private static void RequestMainThreadInitialization()
+    {
+        if (Interlocked.Exchange(ref InitializationRequested, 1) != 0) return;
+        Dispatcher.SynchronizationContext.Post(
+            static _ =>
+            {
+                if (Global != null) return;
+                CreateGlobalInstance();
+            },
+            null
+        );
+    }
+
+    private static void CreateGlobalInstance()
+    {
+        if (Global != null) return;
+
+        var newInstance = new PlayerLoopRunnerProvider();
+        var root = ((SceneTree)Engine.GetMainLoop()).Root;
+        root.CallDeferred(Node.MethodName.AddChild, newInstance, false, Variant.From(InternalMode.Front));
+        newInstance.Name = "GDTaskPlayerLoopRunner";
+        Global = newInstance;
+        Volatile.Write(ref InitializationRequested, 1);
+    }
 
     public override void _Ready()
     {
@@ -68,24 +137,27 @@ partial class PlayerLoopRunnerProvider : Node
     public override void _Notification(int what)
     {
         if (what != NotificationPredelete) return;
-        _processProxy.NotifyPredelete();
-        _physicsProcessProxy.NotifyPredelete();
-        _deferredProxy.NotifyPredelete();
         if (Global != this) return;
+        ProcessProxy.NotifyPredelete();
+        PhysicsProcessProxy.NotifyPredelete();
+        IsolatedProcessProxy.NotifyPredelete();
+        IsolatedPhysicsProcessProxy.NotifyPredelete();
+        DeferredProxy.NotifyPredelete();
         Global = null;
+        Volatile.Write(ref InitializationRequested, 0);
     }
 
     public override void _Process(double delta)
     {
-        _processProxy.NotifyProcess(delta);
+        ProcessProxy.NotifyProcess(delta);
         _deferredArgs[0] = delta;
         CallDeferred(MethodName.DeferredProcess, _deferredArgs);
     }
 
-    public override void _PhysicsProcess(double delta) => _physicsProcessProxy.NotifyProcess(delta);
+    public override void _PhysicsProcess(double delta) => PhysicsProcessProxy.NotifyProcess(delta);
 
     private void DeferredProcess(double delta) =>
-        _deferredProxy.NotifyProcess(delta);
+        DeferredProxy.NotifyProcess(delta);
 }
 
 class PlayerLoopProxy : IPlayerLoop

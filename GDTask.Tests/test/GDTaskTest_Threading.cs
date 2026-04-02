@@ -71,6 +71,30 @@ public class GDTaskTest_Threading
     }
 
     [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_SwitchToMainThread_BackgroundFirstAccess_InitializesSafely()
+    {
+        var mainThreadId = Thread.CurrentThread.ManagedThreadId;
+        var backgroundLoopSource = new TaskCompletionSource<IPlayerLoop>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var resumeTask = Task.Run(async () =>
+        {
+            var playerLoop = PlayerLoopRunnerProvider.Process;
+            backgroundLoopSource.SetResult(playerLoop);
+            await GDTask.SwitchToMainThread();
+            return Thread.CurrentThread.ManagedThreadId;
+        });
+
+        var backgroundLoop = await backgroundLoopSource.Task;
+
+        await GDTask.Yield();
+
+        var resumedThreadId = await resumeTask;
+
+        Assertions.AssertThat(ReferenceEquals(backgroundLoop, PlayerLoopRunnerProvider.Process)).IsTrue();
+        Assertions.AssertThat(resumedThreadId).IsEqual(mainThreadId);
+    }
+
+    [TestCase, RequireGodotRuntime]
     public static async Task GDTask_Post_CustomPlayerLoop()
     {
         await Constants.WaitForTaskReadyAsync();
