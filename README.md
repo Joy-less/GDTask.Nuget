@@ -6,7 +6,7 @@
 [![Stars](https://img.shields.io/github/stars/Delsin-Yu/GDTask.Nuget?color=brightgreen)](https://github.com/Delsin-Yu/GDTask.Nuget/stargazers)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/Delsin-Yu/GDTask.Nuget/blob/main/LICENSE)
 
-- Ported and Tested in Godot 4.2 with .Net module.
+- Targets .NET 6 through .NET 10 with a GodotSharp 4.1.0+ dependency floor.
 - This is the Nuget Package version based on code from:
   - **[Atlinx's GDTask addon for Godot](https://github.com/Fractural/GDTask)**
   - **[Cysharp's UniTask library for Unity](https://github.com/Cysharp/UniTask)**
@@ -18,7 +18,7 @@
 ## Table of Contents
 
 - [Abstract](#abstract)
-  - [Efficient allocation free async/await integration for Godot](#efficient-allocation-free-asyncawait-integration-for-godot)
+    - [Lightweight async/await integration for Godot](#lightweight-asyncawait-integration-for-godot)
   - [GDTask Under the hood](#gdtask-under-the-hood)
 - [Installation via Nuget](#installation-via-nuget)
 - [Basic API usage](#basic-api-usage)
@@ -34,16 +34,18 @@
 
 > Clarification: Contents in the abstract section are mostly migrated from the [Cysharp's UniTask library for Unity](https://github.com/Cysharp/UniTask)
 
-### Efficient allocation free async/await integration for Godot
+### Lightweight async/await integration for Godot
 
-- Struct-based `GDTask<T>` and custom AsyncMethodBuilder to achieve zero allocation.
-- Provides `awaitable` functionality for certain Engine event functions.
-- Runs completely on Godot PlayerLoop so doesn't use threads.
-- Highly compatible behavior with Task/ValueTask/IValueTaskSource.
+- Struct-based `GDTask<T>` with custom AsyncMethodBuilder: synchronously completed tasks require no heap allocation; asynchronous suspensions use pooled, reusable state-machine runners and promise objects instead of allocating a new `Task` each time.
+- Bypasses `SynchronizationContext` and `ExecutionContext` capture by default, eliminating the per-`await` context-save overhead of the standard `Task` async model.
+- Continuations are dispatched directly onto the Godot player loop (`Process`, `PhysicsProcess`, deferred, and isolated timings), removing the need for `TaskScheduler` or timer-based bridging.
+- Provides Godot-specific awaitable primitives - frame delays, signal awaiting, `WaitUntil`/`WaitWhile` with automatic `GodotObject` lifetime tracking, and explicit thread-switching APIs (`SwitchToThreadPool`, `SwitchToMainThread`).
+- Highly compatible surface with `Task`/`ValueTask`/`IValueTaskSource` (including direct conversion via `AsGDTask` / `AsTask`).
 
 ### GDTask Under the hood
 
-- Based on the [task-like custom async method builder feature.](https://github.com/dotnet/roslyn/blob/main/docs/features/task-types.md) of C# 7.0, GDTask does not use [Threads](https://learn.microsoft.com/en-us/dotnet/standard/threading/using-threads-and-threading), [SynchronizationContext](https://learn.microsoft.com/en-us/dotnet/api/system.threading.synchronizationcontext), or [ExecutionContext](https://learn.microsoft.com/en-us/dotnet/api/system.threading.executioncontext). Instead, it dispatches the asynchronous tasks onto a standalone singleton node [GDTaskPlayerLoopRunner](https://github.com/Delsin-Yu/GDTask.Nuget/blob/main/GDTask/src/Autoload/GDTaskPlayerLoopRunner.cs), which results in better performance, and lower allocation.
+- Built on the [task-like custom async method builder feature](https://github.com/dotnet/roslyn/blob/main/docs/features/task-types.md) of C# 7.0. `GDTask` / `GDTask<T>` are `readonly struct` types holding only a poolable `IGDTaskSource` reference and a version token. When a task completes synchronously the result is inlined in the struct with zero heap traffic; when it truly suspends, the async state machine is copied into a pooled runner object, not a new `Task`, and the runner's `MoveNext` delegate is pre-allocated and reused.
+- The core completion primitive (`GDTaskCompletionSourceCore<T>`) explicitly never captures [ExecutionContext](https://learn.microsoft.com/en-us/dotnet/api/system.threading.executioncontext) or [SynchronizationContext](https://learn.microsoft.com/en-us/dotnet/api/system.threading.synchronizationcontext). Returning to the main thread is handled by enqueuing continuations into the player-loop-driven `ContinuationQueue` on the singleton node [GDTaskPlayerLoopRunner](https://github.com/Delsin-Yu/GDTask.Nuget/blob/main/GDTask/src/PlayerLoopRunner/PlayerLoopRunnerProvider.cs), not by posting back through a synchronization context.
 
 ## Installation via Nuget
 
@@ -64,7 +66,7 @@ NuGet\Install-Package GDTask
 For more detailed usage, see **[Unit Tests](https://github.com/Delsin-Yu/GDTask.Nuget/tree/main/GDTask.Tests/test)**.
 
 ```csharp
-using GodotTasks.Tasks;
+using GodotTask;
 
 // Use GDTaskVoid if this task is only used with ApiUsage().Forget();
 public async GDTask ApiUsage()
@@ -73,22 +75,23 @@ public async GDTask ApiUsage()
     await GDTask.DelayFrame(100); 
     
     // Delay the execution after delayTimeSpan.
-    await GDTask.Delay(TimeSpan.FromSeconds(10), DelayType.Realtime);
+    await GDTask.Delay(TimeSpan.FromSeconds(1), DelayType.Realtime);
 
     // Delay the execution until the next Process.
     await GDTask.Yield(PlayerLoopTiming.Process);
 
-    // The same overload families also accept any IPlayerLoop implementation.
-    // Example: await GDTask.Delay(TimeSpan.FromSeconds(1), DelayType.DeltaTime, myCustomLoop);
+    // The same APIs also accept any IPlayerLoop implementation.
+    IPlayerLoop processLoop = PlayerLoopRunnerProvider.Process;
+    await GDTask.Delay(TimeSpan.FromMilliseconds(10), DelayType.DeltaTime, processLoop);
 
     // Delay the execution until the next PhysicsProcess.
     await GDTask.WaitForPhysicsProcess();
 
     // Creates a task that will complete at the next provided PlayerLoopTiming when the supplied predicate evaluates to true
-    await GDTask.WaitUntil(() => Time.GetTimeDictFromSystem()["minute"].AsInt32() % 2 == 0);
+    await GDTask.WaitUntil(() => Time.GetTimeDictFromSystem()["second"].AsInt32() % 2 == 0);
     
     // Creates a task that will complete at the next provided PlayerLoopTiming when the provided monitorFunction returns a different value.
-    await GDTask.WaitUntilValueChanged(Time.Singleton, timeInstance => timeInstance.GetTimeDictFromSystem()["minute"]);
+    await GDTask.WaitUntilValueChanged(Time.Singleton, timeInstance => timeInstance.GetTimeDictFromSystem()["second"]);
     
     // Creates an awaitable that asynchronously yields to ThreadPool when awaited.
     await GDTask.SwitchToThreadPool();
@@ -128,7 +131,10 @@ public async GDTask ApiUsage()
         // Creates a GDTask that has completed due to cancellation with the specified cancellation token.
         await GDTask.FromCanceled(CancellationToken.None);
     }
-    catch (TaskCanceledException) { }
+    catch (OperationCanceledException) { }
+    
+    // Or use an alternative pattern to handle cancellation without exception:
+    var isCanceled = await GDTask.FromCanceled(CancellationToken.None).SuppressCancellationThrow();
     
     try
     {
@@ -137,7 +143,7 @@ public async GDTask ApiUsage()
         // Creates a task that never completes, with specified CancellationToken.
         await GDTask.Never(source.Token);
     }
-    catch (TaskCanceledException) { }
+    catch (OperationCanceledException) { }
     
     // Queues the specified work to run on the ThreadPool and returns a GDTask handle for that work.
     await GDTask.RunOnThreadPool(
@@ -150,7 +156,11 @@ public async GDTask ApiUsage()
     await Task.Delay(5).AsGDTask(useCurrentSynchronizationContext: true);
 
     // Associate a time out to the current GDTask.
-    await GDTask.Never(CancellationToken.None).Timeout(TimeSpan.FromMilliseconds(5));
+    try
+    {
+        await GDTask.Never(CancellationToken.None).Timeout(TimeSpan.FromMilliseconds(5));
+    }
+    catch (TimeoutException) { }
 
 }
 ```
@@ -169,7 +179,7 @@ AsyncTriggers are no longer included in the main GDTask package. If there is con
 
 Authored by: [@Joy-less](https://github.com/Joy-less)
 
-This package adds support for attaching a global cancellation token to GDTasks with the `AttachGlobalCancellation` extension method and cancelling it with the `GDTaskGlobalCancellationManager.Cancel` method. This is useful for cancelling certain tasks in bulk.
+This package adds support for attaching a global cancellation token to GDTasks with the `AttachGlobalCancellation` extension method and cancelling it with the `GDTaskGlobalCancellation.Cancel` method. This is useful for cancelling certain tasks in bulk.
 
 Package: [GDTask.GlobalCancellation on NuGet](https://www.nuget.org/packages/GDTask.GlobalCancellation)
 
