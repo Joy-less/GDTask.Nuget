@@ -401,6 +401,8 @@ public readonly struct ReturnToSynchronizationContext
 {
     private readonly SynchronizationContext _syncContext;
     private readonly bool _dontPostWhenSameContext;
+    
+    /// <summary> The cancellation token associated with this context. </summary>
     public readonly CancellationToken CancellationToken;
 
     internal ReturnToSynchronizationContext(SynchronizationContext syncContext, bool dontPostWhenSameContext, CancellationToken cancellationToken)
