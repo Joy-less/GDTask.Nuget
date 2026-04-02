@@ -3,755 +3,521 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
-using System.Threading;
 using System.Threading.Tasks;
 using GodotTask.CompilerServices;
 
-namespace GodotTask
+namespace GodotTask;
+
+static class AwaiterActions
 {
-    internal static class AwaiterActions
-    {
-        internal static readonly Action<object> InvokeContinuationDelegate = Continuation;
+    internal static readonly Action<object> InvokeContinuationDelegate = Continuation;
 
-        [DebuggerHidden]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void Continuation(object state)
+    [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void Continuation(object state) => ((Action)state).Invoke();
+}
+
+/// <summary>
+/// Lightweight Godot specific task-like object with a void return value.
+/// </summary>
+[AsyncMethodBuilder(typeof(AsyncGDTaskMethodBuilder)), StructLayout(LayoutKind.Auto)]
+public readonly partial struct GDTask : IGDTask
+{
+    private readonly IGDTaskSource source;
+    private readonly short token;
+
+    [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal GDTask(IGDTaskSource source, short token)
+    {
+        this.source = source;
+        this.token = token;
+    }
+
+    /// <summary>
+    /// Gets the <see cref="GDTaskStatus" /> of this task.
+    /// </summary>
+    public GDTaskStatus Status
+    {
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get
         {
-            ((Action)state).Invoke();
+            if (source == null) return GDTaskStatus.Succeeded;
+            return source.GetStatus(token);
         }
     }
 
     /// <summary>
-    /// Lightweight Godot specific task-like object with a void return value.
+    /// Gets an awaiter used to await this <see cref="GDTask" />.
     /// </summary>
-    [AsyncMethodBuilder(typeof(AsyncGDTaskMethodBuilder))]
-    [StructLayout(LayoutKind.Auto)]
-    public readonly partial struct GDTask : IGDTask
+    [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Awaiter GetAwaiter() => new(this);
+
+    IGDTaskAwaiter IGDTask.GetAwaiter() => GetAwaiter();
+
+    /// <summary>
+    /// Create a <see cref="ValueTask" /> that wraps around this task.
+    /// </summary>
+    public ValueTask AsValueTask() => new(source, token);
+
+    /// <summary>
+    /// returns (bool IsCanceled) instead of throws OperationCanceledException.
+    /// </summary>
+    public GDTask<bool> SuppressCancellationThrow()
     {
-        private readonly IGDTaskSource source;
-        private readonly short token;
+        var status = Status;
+        if (status == GDTaskStatus.Succeeded) return CompletedTasks.False;
+        if (status == GDTaskStatus.Canceled) return CompletedTasks.True;
+        return new(new IsCanceledSource(source), token);
+    }
 
-        [DebuggerHidden]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal GDTask(IGDTaskSource source, short token)
+    /// <summary>
+    /// Returns a string representation of the internal status for this <see cref="GDTask" />.
+    /// </summary>
+    /// <returns></returns>
+    public override string ToString()
+    {
+        if (source == null) return "()";
+        return $"({source.UnsafeGetStatus()})";
+    }
+
+    /// <summary>
+    /// Creates a <see cref="GDTask" /> allows to await multiple times.
+    /// </summary>
+    public GDTask Preserve()
+    {
+        if (source == null) return this;
+
+        return new(new MemoizeSource(source), token);
+    }
+
+    /// <summary>
+    /// Creates a <see cref="GDTask{AsyncUnit}" /> that represents this <see cref="GDTask" />.
+    /// </summary>
+    /// <returns></returns>
+    public GDTask<AsyncUnit> AsAsyncUnitGDTask()
+    {
+        if (source == null) return CompletedTasks.AsyncUnit;
+
+        var status = source.GetStatus(token);
+
+        if (status.IsCompletedSuccessfully())
         {
-            this.source = source;
-            this.token = token;
+            source.GetResult(token);
+            return CompletedTasks.AsyncUnit;
         }
 
-        /// <summary>
-        /// Gets the <see cref="GDTaskStatus"/> of this task.
-        /// </summary>
-        public GDTaskStatus Status
+        if (source is IGDTaskSource<AsyncUnit> asyncUnitSource) return new(asyncUnitSource, token);
+
+        return new(new AsyncUnitSource(source), token);
+    }
+
+    private sealed class AsyncUnitSource(IGDTaskSource source) : IGDTaskSource<AsyncUnit>
+    {
+        public AsyncUnit GetResult(short token)
         {
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get
+            source.GetResult(token);
+            return AsyncUnit.Default;
+        }
+
+        public GDTaskStatus GetStatus(short token) => source.GetStatus(token);
+
+        public void OnCompleted(Action<object> continuation, object state, short token) => source.OnCompleted(continuation, state, token);
+
+        public GDTaskStatus UnsafeGetStatus() => source.UnsafeGetStatus();
+
+        void IGDTaskSource.GetResult(short token) => GetResult(token);
+    }
+
+    private sealed class IsCanceledSource(IGDTaskSource source) : IGDTaskSource<bool>
+    {
+        public bool GetResult(short token)
+        {
+            if (source.GetStatus(token) == GDTaskStatus.Canceled) return true;
+
+            source.GetResult(token);
+            return false;
+        }
+
+        void IGDTaskSource.GetResult(short token) => GetResult(token);
+
+        public GDTaskStatus GetStatus(short token) => source.GetStatus(token);
+
+        public GDTaskStatus UnsafeGetStatus() => source.UnsafeGetStatus();
+
+        public void OnCompleted(Action<object> continuation, object state, short token) => source.OnCompleted(continuation, state, token);
+    }
+
+    private sealed class MemoizeSource(IGDTaskSource source) : IGDTaskSource
+    {
+        private ExceptionDispatchInfo _exception;
+        private IGDTaskSource _source = source;
+        private GDTaskStatus _status;
+
+        public void GetResult(short token)
+        {
+            if (_source == null)
             {
-                if (source == null) return GDTaskStatus.Succeeded;
-                return source.GetStatus(token);
-            }
-        }
-
-        /// <summary>
-        /// Gets an awaiter used to await this <see cref="GDTask"/>.
-        /// </summary>
-        [DebuggerHidden]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Awaiter GetAwaiter()
-        {
-            return new Awaiter(this);
-        }
-
-        IGDTaskAwaiter IGDTask.GetAwaiter() => GetAwaiter();
-
-        /// <summary>
-        /// Create a <see cref="ValueTask"/> that wraps around this task.
-        /// </summary>
-        public ValueTask AsValueTask()
-        {
-            return new ValueTask(source, token);
-        }
-
-        /// <summary>
-        /// returns (bool IsCanceled) instead of throws OperationCanceledException.
-        /// </summary>
-        public GDTask<bool> SuppressCancellationThrow()
-        {
-            var status = Status;
-            if (status == GDTaskStatus.Succeeded) return CompletedTasks.False;
-            if (status == GDTaskStatus.Canceled) return CompletedTasks.True;
-            return new GDTask<bool>(new IsCanceledSource(source), token);
-        }
-        
-        /// <summary>
-        /// Returns a string representation of the internal status for this <see cref="GDTask"/>.
-        /// </summary>
-        /// <returns></returns>
-        public override string ToString()
-        {
-            if (source == null) return "()";
-            return $"({source.UnsafeGetStatus()})";
-        }
-
-        /// <summary>
-        /// Creates a <see cref="GDTask"/> allows to await multiple times.
-        /// </summary>
-        public GDTask Preserve()
-        {
-            if (source == null)
-            {
-                return this;
+                if (_exception != null) _exception.Throw();
             }
             else
-            {
-                return new GDTask(new MemoizeSource(source), token);
-            }
+                try
+                {
+                    _source.GetResult(token);
+                    _status = GDTaskStatus.Succeeded;
+                }
+                catch (Exception ex)
+                {
+                    _exception = ExceptionDispatchInfo.Capture(ex);
+                    if (ex is OperationCanceledException) _status = GDTaskStatus.Canceled;
+                    else _status = GDTaskStatus.Faulted;
+                    throw;
+                }
+                finally { _source = null; }
         }
 
-        /// <summary>
-        /// Creates a <see cref="GDTask{AsyncUnit}"/> that represents this <see cref="GDTask"/>.
-        /// </summary>
-        /// <returns></returns>
-        public GDTask<AsyncUnit> AsAsyncUnitGDTask()
+        public GDTaskStatus GetStatus(short token)
         {
-            if (source == null) return CompletedTasks.AsyncUnit;
+            if (_source == null) return _status;
 
-            var status = source.GetStatus(token);
-            if (status.IsCompletedSuccessfully())
-            {
-                source.GetResult(token);
-                return CompletedTasks.AsyncUnit;
-            }
-            else if (source is IGDTaskSource<AsyncUnit> asyncUnitSource)
-            {
-                return new GDTask<AsyncUnit>(asyncUnitSource, token);
-            }
-
-            return new GDTask<AsyncUnit>(new AsyncUnitSource(source), token);
+            return _source.GetStatus(token);
         }
 
-        private sealed class AsyncUnitSource : IGDTaskSource<AsyncUnit>
+        public void OnCompleted(Action<object> continuation, object state, short token)
         {
-            private readonly IGDTaskSource source;
-
-            public AsyncUnitSource(IGDTaskSource source)
-            {
-                this.source = source;
-            }
-
-            public AsyncUnit GetResult(short token)
-            {
-                source.GetResult(token);
-                return AsyncUnit.Default;
-            }
-
-            public GDTaskStatus GetStatus(short token)
-            {
-                return source.GetStatus(token);
-            }
-
-            public void OnCompleted(Action<object> continuation, object state, short token)
-            {
-                source.OnCompleted(continuation, state, token);
-            }
-
-            public GDTaskStatus UnsafeGetStatus()
-            {
-                return source.UnsafeGetStatus();
-            }
-
-            void IGDTaskSource.GetResult(short token)
-            {
-                GetResult(token);
-            }
+            if (_source == null) continuation(state);
+            else _source.OnCompleted(continuation, state, token);
         }
 
-        private sealed class IsCanceledSource : IGDTaskSource<bool>
+        public GDTaskStatus UnsafeGetStatus()
         {
-            private readonly IGDTaskSource source;
+            if (_source == null) return _status;
 
-            public IsCanceledSource(IGDTaskSource source)
-            {
-                this.source = source;
-            }
-
-            public bool GetResult(short token)
-            {
-                if (source.GetStatus(token) == GDTaskStatus.Canceled)
-                {
-                    return true;
-                }
-
-                source.GetResult(token);
-                return false;
-            }
-
-            void IGDTaskSource.GetResult(short token)
-            {
-                GetResult(token);
-            }
-
-            public GDTaskStatus GetStatus(short token)
-            {
-                return source.GetStatus(token);
-            }
-
-            public GDTaskStatus UnsafeGetStatus()
-            {
-                return source.UnsafeGetStatus();
-            }
-
-            public void OnCompleted(Action<object> continuation, object state, short token)
-            {
-                source.OnCompleted(continuation, state, token);
-            }
-        }
-
-        private sealed class MemoizeSource : IGDTaskSource
-        {
-            private IGDTaskSource source;
-            private ExceptionDispatchInfo exception;
-            private GDTaskStatus status;
-
-            public MemoizeSource(IGDTaskSource source)
-            {
-                this.source = source;
-            }
-
-            public void GetResult(short token)
-            {
-                if (source == null)
-                {
-                    if (exception != null)
-                    {
-                        exception.Throw();
-                    }
-                }
-                else
-                {
-                    try
-                    {
-                        source.GetResult(token);
-                        status = GDTaskStatus.Succeeded;
-                    }
-                    catch (Exception ex)
-                    {
-                        exception = ExceptionDispatchInfo.Capture(ex);
-                        if (ex is OperationCanceledException)
-                        {
-                            status = GDTaskStatus.Canceled;
-                        }
-                        else
-                        {
-                            status = GDTaskStatus.Faulted;
-                        }
-                        throw;
-                    }
-                    finally
-                    {
-                        source = null;
-                    }
-                }
-            }
-
-            public GDTaskStatus GetStatus(short token)
-            {
-                if (source == null)
-                {
-                    return status;
-                }
-
-                return source.GetStatus(token);
-            }
-
-            public void OnCompleted(Action<object> continuation, object state, short token)
-            {
-                if (source == null)
-                {
-                    continuation(state);
-                }
-                else
-                {
-                    source.OnCompleted(continuation, state, token);
-                }
-            }
-
-            public GDTaskStatus UnsafeGetStatus()
-            {
-                if (source == null)
-                {
-                    return status;
-                }
-
-                return source.UnsafeGetStatus();
-            }
-        }
-
-        /// <summary>
-        /// Provides an awaiter for awaiting a <see cref="GDTask"/>.
-        /// </summary>
-        public readonly struct Awaiter : IGDTaskAwaiter
-        {
-            private readonly GDTask task;
-
-            /// <summary>
-            /// Initializes the <see cref="Awaiter"/>.
-            /// </summary>
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public Awaiter(in GDTask task)
-            {
-                this.task = task;
-            }
-
-            /// <summary>
-            /// Gets whether this <see cref="GDTask"/> has completed.
-            /// </summary>
-            public bool IsCompleted
-            {
-                [DebuggerHidden]
-                [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                get => task.Status.IsCompleted();
-            }
-
-            /// <summary>
-            /// Ends the awaiting on the completed <see cref="GDTask"/>.
-            /// </summary>
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void GetResult()
-            {
-                if (task.source == null) return;
-                task.source.GetResult(task.token);
-            }
-
-            object IGDTaskAwaiter.GetResult()
-            {
-                GetResult();
-                return null;
-            }
-
-            /// <summary>
-            /// Schedules the continuation onto the <see cref="GDTask"/> associated with this <see cref="Awaiter"/>.
-            /// </summary>
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void OnCompleted(Action continuation)
-            {
-                if (task.source == null)
-                {
-                    continuation();
-                }
-                else
-                {
-                    task.source.OnCompleted(AwaiterActions.InvokeContinuationDelegate, continuation, task.token);
-                }
-            }
-
-            /// <summary>
-            /// Schedules the continuation onto the <see cref="GDTask"/> associated with this <see cref="Awaiter"/>.
-            /// </summary>
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void UnsafeOnCompleted(Action continuation)
-            {
-                if (task.source == null)
-                {
-                    continuation();
-                }
-                else
-                {
-                    task.source.OnCompleted(AwaiterActions.InvokeContinuationDelegate, continuation, task.token);
-                }
-            }
-
-            /// <summary>
-            /// If register manually continuation, you can use it instead of for compiler OnCompleted methods.
-            /// </summary>
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void SourceOnCompleted(Action<object> continuation, object state)
-            {
-                if (task.source == null)
-                {
-                    continuation(state);
-                }
-                else
-                {
-                    task.source.OnCompleted(continuation, state, task.token);
-                }
-            }
+            return _source.UnsafeGetStatus();
         }
     }
 
     /// <summary>
-    /// Lightweight Godot specified task-like object with a return value.
+    /// Provides an awaiter for awaiting a <see cref="GDTask" />.
     /// </summary>
-    /// <typeparam name="T">Return value of the task</typeparam>
-    [AsyncMethodBuilder(typeof(AsyncGDTaskMethodBuilder<>))]
-    [StructLayout(LayoutKind.Auto)]
-    public readonly struct GDTask<T> : IGDTask
+    public readonly struct Awaiter : IGDTaskAwaiter
     {
-        private readonly IGDTaskSource<T> source;
-        private readonly T result;
-        private readonly short token;
+        private readonly GDTask _task;
 
-        [DebuggerHidden]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal GDTask(T result)
+        /// <summary>
+        /// Initializes the <see cref="Awaiter" />.
+        /// </summary>
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Awaiter(in GDTask task)
         {
-            source = default;
-            token = default;
-            this.result = result;
-        }
-
-        [DebuggerHidden]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal GDTask(IGDTaskSource<T> source, short token)
-        {
-            this.source = source;
-            this.token = token;
-            result = default;
+            _task = task;
         }
 
         /// <summary>
-        /// Gets the <see cref="GDTaskStatus"/> of this task.
+        /// Gets whether this <see cref="GDTask" /> has completed.
         /// </summary>
-        public GDTaskStatus Status
+        public bool IsCompleted
         {
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => (source == null) ? GDTaskStatus.Succeeded : source.GetStatus(token);
+            [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _task.Status.IsCompleted();
         }
 
         /// <summary>
-        /// Gets an awaiter used to await this <see cref="GDTask{T}"/>.
+        /// Ends the awaiting on the completed <see cref="GDTask" />.
         /// </summary>
-        [DebuggerHidden]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Awaiter GetAwaiter()
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void GetResult()
         {
-            return new Awaiter(this);
+            if (_task.source == null) return;
+            _task.source.GetResult(_task.token);
         }
 
-        IGDTaskAwaiter IGDTask.GetAwaiter() => GetAwaiter();
-         
-        /// <summary>
-        /// Creates a <see cref="GDTask{T}"/> allows to await multiple times.
-        /// </summary>
-        public GDTask<T> Preserve()
+        object IGDTaskAwaiter.GetResult()
         {
-            if (source == null)
-            {
-                return this;
-            }
-            else
-            {
-                return new GDTask<T>(new MemoizeSource(source), token);
-            }
+            GetResult();
+            return null;
         }
 
         /// <summary>
-        /// Creates a <see cref="GDTask"/> that represents this <see cref="GDTask{T}"/>.
+        /// Schedules the continuation onto the <see cref="GDTask" /> associated with this <see cref="Awaiter" />.
         /// </summary>
-        public GDTask AsGDTask()
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void OnCompleted(Action continuation)
         {
-            if (source == null) return GDTask.CompletedTask;
-
-            var status = source.GetStatus(token);
-            if (status.IsCompletedSuccessfully())
-            {
-                source.GetResult(token);
-                return GDTask.CompletedTask;
-            }
-
-            // Converting GDTask<T> -> GDTask is zero overhead.
-            return new GDTask(source, token);
+            if (_task.source == null) continuation();
+            else _task.source.OnCompleted(AwaiterActions.InvokeContinuationDelegate, continuation, _task.token);
         }
 
         /// <summary>
-        /// Implicit operator for covert from <see cref="GDTask{T}"/> to <see cref="GDTask"/>.
+        /// Schedules the continuation onto the <see cref="GDTask" /> associated with this <see cref="Awaiter" />.
         /// </summary>
-        public static implicit operator GDTask(GDTask<T> self)
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void UnsafeOnCompleted(Action continuation)
         {
-            return self.AsGDTask();
+            if (_task.source == null) continuation();
+            else _task.source.OnCompleted(AwaiterActions.InvokeContinuationDelegate, continuation, _task.token);
         }
 
         /// <summary>
-        /// Create a <see cref="ValueTask{T}"/> that wraps around this task.
+        /// If register manually continuation, you can use it instead of for compiler OnCompleted methods.
         /// </summary>
-        public ValueTask<T> AsValueTask()
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SourceOnCompleted(Action<object> continuation, object state)
         {
-            return new ValueTask<T>(source, token);
+            if (_task.source == null) continuation(state);
+            else _task.source.OnCompleted(continuation, state, _task.token);
+        }
+    }
+}
+
+/// <summary>
+/// Lightweight Godot specified task-like object with a return value.
+/// </summary>
+/// <typeparam name="T">Return value of the task</typeparam>
+[AsyncMethodBuilder(typeof(AsyncGDTaskMethodBuilder<>)), StructLayout(LayoutKind.Auto)]
+public readonly struct GDTask<T> : IGDTask
+{
+    private readonly IGDTaskSource<T> source;
+    private readonly T result;
+    private readonly short token;
+
+    [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal GDTask(T result)
+    {
+        source = default;
+        token = default;
+        this.result = result;
+    }
+
+    [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal GDTask(IGDTaskSource<T> source, short token)
+    {
+        this.source = source;
+        this.token = token;
+        result = default;
+    }
+
+    /// <summary>
+    /// Gets the <see cref="GDTaskStatus" /> of this task.
+    /// </summary>
+    public GDTaskStatus Status
+    {
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => source == null ? GDTaskStatus.Succeeded : source.GetStatus(token);
+    }
+
+    /// <summary>
+    /// Gets an awaiter used to await this <see cref="GDTask{T}" />.
+    /// </summary>
+    [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Awaiter GetAwaiter() => new(this);
+
+    IGDTaskAwaiter IGDTask.GetAwaiter() => GetAwaiter();
+
+    /// <summary>
+    /// Creates a <see cref="GDTask{T}" /> allows to await multiple times.
+    /// </summary>
+    public GDTask<T> Preserve()
+    {
+        if (source == null) return this;
+
+        return new(new MemoizeSource(source), token);
+    }
+
+    /// <summary>
+    /// Creates a <see cref="GDTask" /> that represents this <see cref="GDTask{T}" />.
+    /// </summary>
+    public GDTask AsGDTask()
+    {
+        if (source == null) return GDTask.CompletedTask;
+
+        var status = source.GetStatus(token);
+
+        if (status.IsCompletedSuccessfully())
+        {
+            source.GetResult(token);
+            return GDTask.CompletedTask;
+        }
+
+        // Converting GDTask<T> -> GDTask is zero overhead.
+        return new(source, token);
+    }
+
+    /// <summary>
+    /// Implicit operator for covert from <see cref="GDTask{T}" /> to <see cref="GDTask" />.
+    /// </summary>
+    public static implicit operator GDTask(GDTask<T> self) => self.AsGDTask();
+
+    /// <summary>
+    /// Create a <see cref="ValueTask{T}" /> that wraps around this task.
+    /// </summary>
+    public ValueTask<T> AsValueTask() => new(source, token);
+
+    /// <summary>
+    /// returns (bool IsCanceled, T Result) instead of throws OperationCanceledException.
+    /// </summary>
+    public GDTask<(bool IsCanceled, T Result)> SuppressCancellationThrow()
+    {
+        if (source == null) return new((false, result));
+
+        return new GDTask<(bool, T)>(new IsCanceledSource(source), token);
+    }
+
+    /// <summary>
+    /// Returns a string representation of the internal status for this <see cref="GDTask{T}" />.
+    /// </summary>
+    public override string ToString() =>
+        source == null
+            ? result?.ToString()
+            : "(" + source.UnsafeGetStatus() + ")";
+
+    [method: DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private sealed class IsCanceledSource(IGDTaskSource<T> source) : IGDTaskSource<(bool, T)>
+    {
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public (bool, T) GetResult(short token)
+        {
+            if (source.GetStatus(token) == GDTaskStatus.Canceled) return (true, default);
+
+            var result = source.GetResult(token);
+            return (false, result);
+        }
+
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        void IGDTaskSource.GetResult(short token) => GetResult(token);
+
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public GDTaskStatus GetStatus(short token) => source.GetStatus(token);
+
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public GDTaskStatus UnsafeGetStatus() => source.UnsafeGetStatus();
+
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void OnCompleted(Action<object> continuation, object state, short token) => source.OnCompleted(continuation, state, token);
+    }
+
+    private sealed class MemoizeSource(IGDTaskSource<T> source) : IGDTaskSource<T>
+    {
+        private ExceptionDispatchInfo _exception;
+        private T _result;
+        private IGDTaskSource<T> _source = source;
+        private GDTaskStatus _status;
+
+        public T GetResult(short token)
+        {
+            if (_source == null)
+            {
+                if (_exception != null) _exception.Throw();
+                return _result;
+            }
+
+            try
+            {
+                _result = _source.GetResult(token);
+                _status = GDTaskStatus.Succeeded;
+                return _result;
+            }
+            catch (Exception ex)
+            {
+                _exception = ExceptionDispatchInfo.Capture(ex);
+                if (ex is OperationCanceledException) _status = GDTaskStatus.Canceled;
+                else _status = GDTaskStatus.Faulted;
+                throw;
+            }
+            finally { _source = null; }
+        }
+
+        void IGDTaskSource.GetResult(short token) => GetResult(token);
+
+        public GDTaskStatus GetStatus(short token)
+        {
+            if (_source == null) return _status;
+
+            return _source.GetStatus(token);
+        }
+
+        public void OnCompleted(Action<object> continuation, object state, short token)
+        {
+            if (_source == null) continuation(state);
+            else _source.OnCompleted(continuation, state, token);
+        }
+
+        public GDTaskStatus UnsafeGetStatus()
+        {
+            if (_source == null) return _status;
+
+            return _source.UnsafeGetStatus();
+        }
+    }
+
+    /// <summary>
+    /// Provides an awaiter for awaiting a <see cref="GDTask{T}" />.
+    /// </summary>
+    public readonly struct Awaiter : IGDTaskAwaiter
+    {
+        private readonly GDTask<T> _task;
+
+        /// <summary>
+        /// Initializes the <see cref="Awaiter" />.
+        /// </summary>
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Awaiter(in GDTask<T> task)
+        {
+            _task = task;
         }
 
         /// <summary>
-        /// returns (bool IsCanceled, T Result) instead of throws OperationCanceledException.
+        /// Gets whether this <see cref="GDTask{T}">Task</see> has completed.
         /// </summary>
-        public GDTask<(bool IsCanceled, T Result)> SuppressCancellationThrow()
+        public bool IsCompleted
         {
-            if (source == null)
-            {
-                return new GDTask<(bool IsCanceled, T Result)>((false, result));
-            }
-
-            return new GDTask<(bool, T)>(new IsCanceledSource(source), token);
+            [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _task.Status.IsCompleted();
         }
 
         /// <summary>
-        /// Returns a string representation of the internal status for this <see cref="GDTask{T}"/>.
+        /// Ends the awaiting on the completed <see cref="GDTask{T}" />.
         /// </summary>
-        public override string ToString()
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public T GetResult()
         {
-            return (source == null) ? result?.ToString()
-                 : "(" + source.UnsafeGetStatus() + ")";
+            var s = _task.source;
+            if (s == null) return _task.result;
+
+            return s.GetResult(_task.token);
         }
 
-        private sealed class IsCanceledSource : IGDTaskSource<(bool, T)>
+        object IGDTaskAwaiter.GetResult() => GetResult();
+
+        /// <summary>
+        /// Schedules the continuation onto the <see cref="GDTask{T}" /> associated with this <see cref="Awaiter" />.
+        /// </summary>
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void OnCompleted(Action continuation)
         {
-            private readonly IGDTaskSource<T> source;
-
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public IsCanceledSource(IGDTaskSource<T> source)
-            {
-                this.source = source;
-            }
-
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public (bool, T) GetResult(short token)
-            {
-                if (source.GetStatus(token) == GDTaskStatus.Canceled)
-                {
-                    return (true, default);
-                }
-
-                var result = source.GetResult(token);
-                return (false, result);
-            }
-
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            void IGDTaskSource.GetResult(short token)
-            {
-                GetResult(token);
-            }
-
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public GDTaskStatus GetStatus(short token)
-            {
-                return source.GetStatus(token);
-            }
-
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public GDTaskStatus UnsafeGetStatus()
-            {
-                return source.UnsafeGetStatus();
-            }
-
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void OnCompleted(Action<object> continuation, object state, short token)
-            {
-                source.OnCompleted(continuation, state, token);
-            }
-        }
-
-        private sealed class MemoizeSource : IGDTaskSource<T>
-        {
-            private IGDTaskSource<T> source;
-            private T result;
-            private ExceptionDispatchInfo exception;
-            private GDTaskStatus status;
-
-            public MemoizeSource(IGDTaskSource<T> source)
-            {
-                this.source = source;
-            }
-
-            public T GetResult(short token)
-            {
-                if (source == null)
-                {
-                    if (exception != null)
-                    {
-                        exception.Throw();
-                    }
-                    return result;
-                }
-                else
-                {
-                    try
-                    {
-                        result = source.GetResult(token);
-                        status = GDTaskStatus.Succeeded;
-                        return result;
-                    }
-                    catch (Exception ex)
-                    {
-                        exception = ExceptionDispatchInfo.Capture(ex);
-                        if (ex is OperationCanceledException)
-                        {
-                            status = GDTaskStatus.Canceled;
-                        }
-                        else
-                        {
-                            status = GDTaskStatus.Faulted;
-                        }
-                        throw;
-                    }
-                    finally
-                    {
-                        source = null;
-                    }
-                }
-            }
-            
-            void IGDTaskSource.GetResult(short token)
-            {
-                GetResult(token);
-            }
-
-            public GDTaskStatus GetStatus(short token)
-            {
-                if (source == null)
-                {
-                    return status;
-                }
-
-                return source.GetStatus(token);
-            }
-
-            public void OnCompleted(Action<object> continuation, object state, short token)
-            {
-                if (source == null)
-                {
-                    continuation(state);
-                }
-                else
-                {
-                    source.OnCompleted(continuation, state, token);
-                }
-            }
-
-            public GDTaskStatus UnsafeGetStatus()
-            {
-                if (source == null)
-                {
-                    return status;
-                }
-
-                return source.UnsafeGetStatus();
-            }
+            var s = _task.source;
+            if (s == null) continuation();
+            else s.OnCompleted(AwaiterActions.InvokeContinuationDelegate, continuation, _task.token);
         }
 
         /// <summary>
-        /// Provides an awaiter for awaiting a <see cref="GDTask{T}"/>.
+        /// Schedules the continuation onto the <see cref="GDTask{T}" /> associated with this <see cref="Awaiter" />.
         /// </summary>
-        public readonly struct Awaiter : IGDTaskAwaiter
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void UnsafeOnCompleted(Action continuation)
         {
-            private readonly GDTask<T> task;
+            var s = _task.source;
+            if (s == null) continuation();
+            else s.OnCompleted(AwaiterActions.InvokeContinuationDelegate, continuation, _task.token);
+        }
 
-            /// <summary>
-            /// Initializes the <see cref="Awaiter"/>.
-            /// </summary>
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public Awaiter(in GDTask<T> task)
-            {
-                this.task = task;
-            }
-
-            /// <summary>
-            /// Gets whether this <see cref="GDTask{T}">Task</see> has completed.
-            /// </summary>
-            public bool IsCompleted
-            {
-                [DebuggerHidden]
-                [MethodImpl(MethodImplOptions.AggressiveInlining)]
-                get => task.Status.IsCompleted();
-            }
-
-            /// <summary>
-            /// Ends the awaiting on the completed <see cref="GDTask{T}"/>.
-            /// </summary>
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public T GetResult()
-            {
-                var s = task.source;
-                if (s == null)
-                {
-                    return task.result;
-                }
-                else
-                {
-                    return s.GetResult(task.token);
-                }
-            }
-            
-            object IGDTaskAwaiter.GetResult()
-            {
-                return GetResult();
-            }
-
-            /// <summary>
-            /// Schedules the continuation onto the <see cref="GDTask{T}"/> associated with this <see cref="Awaiter"/>.
-            /// </summary>
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void OnCompleted(Action continuation)
-            {
-                var s = task.source;
-                if (s == null)
-                {
-                    continuation();
-                }
-                else
-                {
-                    s.OnCompleted(AwaiterActions.InvokeContinuationDelegate, continuation, task.token);
-                }
-            }
-
-            /// <summary>
-            /// Schedules the continuation onto the <see cref="GDTask{T}"/> associated with this <see cref="Awaiter"/>.
-            /// </summary>
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void UnsafeOnCompleted(Action continuation)
-            {
-                var s = task.source;
-                if (s == null)
-                {
-                    continuation();
-                }
-                else
-                {
-                    s.OnCompleted(AwaiterActions.InvokeContinuationDelegate, continuation, task.token);
-                }
-            }
-
-            /// <summary>
-            /// If register manually continuation, you can use it instead of for compiler OnCompleted methods.
-            /// </summary>
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public void SourceOnCompleted(Action<object> continuation, object state)
-            {
-                var s = task.source;
-                if (s == null)
-                {
-                    continuation(state);
-                }
-                else
-                {
-                    s.OnCompleted(continuation, state, task.token);
-                }
-            }
+        /// <summary>
+        /// If register manually continuation, you can use it instead of for compiler OnCompleted methods.
+        /// </summary>
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void SourceOnCompleted(Action<object> continuation, object state)
+        {
+            var s = _task.source;
+            if (s == null) continuation(state);
+            else s.OnCompleted(continuation, state, _task.token);
         }
     }
 }

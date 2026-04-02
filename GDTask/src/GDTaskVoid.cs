@@ -5,14 +5,10 @@
 using System.Runtime.CompilerServices;
 using GodotTask.CompilerServices;
 
-namespace GodotTask
-{
-    [AsyncMethodBuilder(typeof(AsyncGDTaskVoidMethodBuilder))]
-    public readonly struct GDTaskVoid
-    {
-        public void Forget()
-        {
-        }
-    }
-}
+namespace GodotTask;
 
+[AsyncMethodBuilder(typeof(AsyncGDTaskVoidMethodBuilder))]
+public readonly struct GDTaskVoid
+{
+    public void Forget() { }
+}

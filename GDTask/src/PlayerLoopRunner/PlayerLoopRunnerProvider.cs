@@ -4,39 +4,21 @@ using Godot;
 using GodotTask.Internal;
 
 [assembly: InternalsVisibleTo("GDTask.Tests")]
+
 namespace GodotTask;
 
 #nullable enable
-internal partial class PlayerLoopRunnerProvider : Node
+partial class PlayerLoopRunnerProvider : Node
 {
-    private static PlayerLoopRunnerProvider? _global;
+    private static PlayerLoopRunnerProvider? Global;
 
-    internal static PlayerLoopRunnerProvider GlobalInstance
-    {
-        get
-        {
-            RuntimeChecker.ThrowIfEditor();
-            if (_global != null) return _global;
-            var newInstance = new PlayerLoopRunnerProvider();
-            var root = ((SceneTree)Engine.GetMainLoop()).Root;
-            root.CallDeferred(Node.MethodName.AddChild, newInstance, false, Variant.From(InternalMode.Front));
-            newInstance.Name = "GDTaskPlayerLoopRunner";
-            _global = newInstance;
-            return _global;
-        }
-    }
+    private readonly Variant[] _deferredArgs = new Variant[1];
+    private readonly PlayerLoopProxy _deferredProxy;
+    private readonly PlayerLoopProxy _isolatedPhysicsProcessProxy;
+    private readonly PlayerLoopProxy _isolatedProcessProxy;
+    private readonly PlayerLoopProxy _physicsProcessProxy;
 
-    public override void _Ready()
-    {
-        if (_global == null)
-        {
-            _global = this;
-            return;
-        }
-
-        if (_global == this) return;
-        QueueFree();
-    }
+    private readonly PlayerLoopProxy _processProxy;
 
     private PlayerLoopRunnerProvider()
     {
@@ -50,11 +32,20 @@ internal partial class PlayerLoopRunnerProvider : Node
         isolatedPlayerLoopRunner.Name = "IsolatedGDTaskPlayerLoopRunner";
     }
 
-    private readonly PlayerLoopProxy _processProxy;
-    private readonly PlayerLoopProxy _physicsProcessProxy;
-    private readonly PlayerLoopProxy _deferredProxy;
-    private readonly PlayerLoopProxy _isolatedProcessProxy;
-    private readonly PlayerLoopProxy _isolatedPhysicsProcessProxy;
+    internal static PlayerLoopRunnerProvider GlobalInstance
+    {
+        get
+        {
+            RuntimeChecker.ThrowIfEditor();
+            if (Global != null) return Global;
+            var newInstance = new PlayerLoopRunnerProvider();
+            var root = ((SceneTree)Engine.GetMainLoop()).Root;
+            root.CallDeferred(Node.MethodName.AddChild, newInstance, false, Variant.From(InternalMode.Front));
+            newInstance.Name = "GDTaskPlayerLoopRunner";
+            Global = newInstance;
+            return Global;
+        }
+    }
 
     public static IPlayerLoop Process => GlobalInstance._processProxy;
     public static IPlayerLoop PhysicsProcess => GlobalInstance._physicsProcessProxy;
@@ -62,38 +53,45 @@ internal partial class PlayerLoopRunnerProvider : Node
     public static IPlayerLoop IsolatedPhysicsProcess => GlobalInstance._isolatedPhysicsProcessProxy;
     public static IPlayerLoop Deferred => GlobalInstance._deferredProxy;
 
+    public override void _Ready()
+    {
+        if (Global == null)
+        {
+            Global = this;
+            return;
+        }
+
+        if (Global == this) return;
+        QueueFree();
+    }
+
     public override void _Notification(int what)
     {
         if (what != NotificationPredelete) return;
         _processProxy.NotifyPredelete();
         _physicsProcessProxy.NotifyPredelete();
         _deferredProxy.NotifyPredelete();
-        if (_global != this) return;
-        _global = null;
+        if (Global != this) return;
+        Global = null;
     }
 
-    private readonly Variant[] _deferredArgs = new Variant[1];
     public override void _Process(double delta)
     {
         _processProxy.NotifyProcess(delta);
         _deferredArgs[0] = delta;
         CallDeferred(MethodName.DeferredProcess, _deferredArgs);
     }
-    
-    public override void _PhysicsProcess(double delta)
-    {
-        _physicsProcessProxy.NotifyProcess(delta);
-    }
-    
-    private void DeferredProcess(double delta) => 
+
+    public override void _PhysicsProcess(double delta) => _physicsProcessProxy.NotifyProcess(delta);
+
+    private void DeferredProcess(double delta) =>
         _deferredProxy.NotifyProcess(delta);
 }
 
-internal class PlayerLoopProxy : IPlayerLoop
+class PlayerLoopProxy : IPlayerLoop
 {
-    public void NotifyProcess(double delta) => OnProcess?.Invoke(delta);
-    public void NotifyPredelete() => OnPredelete?.Invoke();
-
     public event Action<double>? OnProcess;
     public event Action? OnPredelete;
+    public void NotifyProcess(double delta) => OnProcess?.Invoke(delta);
+    public void NotifyPredelete() => OnPredelete?.Invoke();
 }

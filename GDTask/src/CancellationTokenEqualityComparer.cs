@@ -1,31 +1,23 @@
 using System.Collections.Generic;
 using System.Threading;
 
-namespace GodotTask
+namespace GodotTask;
+
+/// <summary>
+/// <see cref="System.Collections.Generic.IEqualityComparer{CancellationToken}" /> to support the comparison of
+/// <see cref="CancellationToken" /> for equality.
+/// </summary>
+public class CancellationTokenEqualityComparer : IEqualityComparer<CancellationToken>
 {
     /// <summary>
-    /// <see cref="System.Collections.Generic.IEqualityComparer{CancellationToken}" /> to support the comparison of <see cref="CancellationToken"/> for equality.
+    /// Returns the default equality comparer for <see cref="CancellationToken" />.
     /// </summary>
-    public class CancellationTokenEqualityComparer : IEqualityComparer<CancellationToken>
-    {
-        private CancellationTokenEqualityComparer() { }
+    public static readonly IEqualityComparer<CancellationToken> Default = new CancellationTokenEqualityComparer();
+    private CancellationTokenEqualityComparer() { }
 
-        /// <summary>
-        /// Returns the default equality comparer for <see cref="CancellationToken"/>.
-        /// </summary>
-        public static readonly IEqualityComparer<CancellationToken> Default = new CancellationTokenEqualityComparer();
+    /// <inheritdoc cref="CancellationToken.Equals(CancellationToken)" />
+    public bool Equals(CancellationToken x, CancellationToken y) => x.Equals(y);
 
-        /// <inheritdoc cref="CancellationToken.Equals(CancellationToken)"/>
-        public bool Equals(CancellationToken x, CancellationToken y)
-        {
-            return x.Equals(y);
-        }
-
-        /// <inheritdoc cref="CancellationToken.GetHashCode()"/>
-        public int GetHashCode(CancellationToken obj)
-        {
-            return obj.GetHashCode();
-        }
-    }
+    /// <inheritdoc cref="CancellationToken.GetHashCode()" />
+    public int GetHashCode(CancellationToken obj) => obj.GetHashCode();
 }
-

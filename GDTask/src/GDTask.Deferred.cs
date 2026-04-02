@@ -12,163 +12,125 @@ public partial struct GDTask
     public static DeferredAwaitable Deferred() => new();
 
     /// <summary>
-    /// Delay the execution until the end of the current frame (idle time), with specified <see cref="CancellationToken"/>.
+    /// Delay the execution until the end of the current frame (idle time), with specified <see cref="CancellationToken" />.
     /// </summary>
-    public static GDTask Deferred(CancellationToken cancellationToken)
-    {
-        return new GDTask(DeferredPromise.Create(cancellationToken, out var token), token);
-    }
+    public static GDTask Deferred(CancellationToken cancellationToken) => new(DeferredPromise.Create(cancellationToken, out var token), token);
 
     private sealed class DeferredPromise : IGDTaskSource, IPlayerLoopItem, ITaskPoolNode<DeferredPromise>
     {
-        private static TaskPool<DeferredPromise> pool;
-        private DeferredPromise nextNode;
-        public ref DeferredPromise NextNode => ref nextNode;
+        private static TaskPool<DeferredPromise> Pool;
+
+        private CancellationToken _cancellationToken;
+        private GDTaskCompletionSourceCore<object> _core;
+        private DeferredPromise _nextNode;
 
         static DeferredPromise()
         {
-            TaskPool.RegisterSizeGetter(typeof(DeferredPromise), () => pool.Size);
+            TaskPool.RegisterSizeGetter(typeof(DeferredPromise), () => Pool.Size);
         }
 
-        private CancellationToken cancellationToken;
-        private GDTaskCompletionSourceCore<object> core;
+        private DeferredPromise() { }
 
-        private DeferredPromise()
-        {
-            
-        }
-        
-        public static IGDTaskSource Create(CancellationToken cancellationToken, out short token)
-        {
-            if (cancellationToken.IsCancellationRequested)
-            {
-                return AutoResetGDTaskCompletionSource.CreateFromCanceled(cancellationToken, out token);
-            }
-            
-            if (!pool.TryPop(out var result))
-            {
-                result = new DeferredPromise();
-            }
-            
-            result.cancellationToken = cancellationToken;
-            
-            TaskTracker.TrackActiveTask(result, 3);
-            
-            GDTaskScheduler.AddAction(PlayerLoopTiming.DeferredProcess, result);
-            
-            token = result.core.Version;
-            return result;
-        }
-        
         public void GetResult(short token)
         {
-            try
-            {
-                core.GetResult(token);
-            }
-            finally
-            {
-                TryReturn();
-            }
+            try { _core.GetResult(token); }
+            finally { TryReturn(); }
         }
 
-        public GDTaskStatus GetStatus(short token)
-        {
-            return core.GetStatus(token);
-        }
+        public GDTaskStatus GetStatus(short token) => _core.GetStatus(token);
 
-        public GDTaskStatus UnsafeGetStatus()
-        {
-            return core.UnsafeGetStatus();
-        }
+        public GDTaskStatus UnsafeGetStatus() => _core.UnsafeGetStatus();
 
-        public void OnCompleted(Action<object> continuation, object state, short token)
-        {
-            core.OnCompleted(continuation, state, token);
-        }
+        public void OnCompleted(Action<object> continuation, object state, short token) => _core.OnCompleted(continuation, state, token);
 
         public bool MoveNext(double deltaTime)
         {
-            if (cancellationToken.IsCancellationRequested)
+            if (_cancellationToken.IsCancellationRequested)
             {
-                core.TrySetCanceled(cancellationToken);
+                _core.TrySetCanceled(_cancellationToken);
                 return false;
             }
 
-            core.TrySetResult(null);
+            _core.TrySetResult(null);
             return false;
+        }
+
+        public ref DeferredPromise NextNode => ref _nextNode;
+
+        public static IGDTaskSource Create(CancellationToken cancellationToken, out short token)
+        {
+            if (cancellationToken.IsCancellationRequested) return AutoResetGDTaskCompletionSource.CreateFromCanceled(cancellationToken, out token);
+
+            if (!Pool.TryPop(out var result)) result = new();
+
+            result._cancellationToken = cancellationToken;
+
+            TaskTracker.TrackActiveTask(result, 3);
+
+            GDTaskScheduler.AddAction(PlayerLoopTiming.DeferredProcess, result);
+
+            token = result._core.Version;
+            return result;
         }
 
         private bool TryReturn()
         {
             TaskTracker.RemoveTracking(this);
-            core.Reset();
-            cancellationToken = default;
-            return pool.TryPush(this);
+            _core.Reset();
+            _cancellationToken = default;
+            return Pool.TryPush(this);
         }
     }
-    
+
     /// <summary>
     /// An awaitable that when awaited, asynchronously continues the execution at the end of the current frame (idle time).
     /// </summary>
     public readonly struct DeferredAwaitable
     {
         /// <summary>
-        /// Initializes the <see cref="DeferredAwaitable"/>.
+        /// Initializes the <see cref="DeferredAwaitable" />.
         /// </summary>
-        public DeferredAwaitable() {
-        }
+        public DeferredAwaitable() { }
 
         /// <summary>
-        /// Gets an awaiter used to await this <see cref="DeferredAwaitable"/>.
+        /// Gets an awaiter used to await this <see cref="DeferredAwaitable" />.
         /// </summary>
         public Awaiter GetAwaiter() => new();
 
         /// <summary>
-        /// Creates a <see cref="GDTask"/> that represents this <see cref="DeferredAwaitable"/>.
+        /// Creates a <see cref="GDTask" /> that represents this <see cref="DeferredAwaitable" />.
         /// </summary>
-        public GDTask ToGDTask()
-        {
-            return GDTask.Deferred(CancellationToken.None);
-        }
-      
+        public GDTask ToGDTask() => Deferred(CancellationToken.None);
+
         /// <summary>
-        /// Provides an awaiter for awaiting a <see cref="DeferredAwaitable"/>.
+        /// Provides an awaiter for awaiting a <see cref="DeferredAwaitable" />.
         /// </summary>
         public readonly struct Awaiter : ICriticalNotifyCompletion
         {
             /// <summary>
-            /// Initializes the <see cref="Awaiter"/>.
+            /// Initializes the <see cref="Awaiter" />.
             /// </summary>
-            public Awaiter() {
-            }
+            public Awaiter() { }
 
             /// <summary>
-            /// Ends the awaiting on the completed <see cref="DeferredAwaitable"/>.
+            /// Ends the awaiting on the completed <see cref="DeferredAwaitable" />.
             /// </summary>
-            public void GetResult() {
-            }
-            
+            public void GetResult() { }
+
             /// <summary>
             /// Gets whether this <see cref="YieldAwaitable">Task</see> has completed, always returns false.
             /// </summary>
             public bool IsCompleted => false;
-          
-            /// <summary>
-            /// Schedules the continuation onto the <see cref="YieldAwaitable"/> associated with this <see cref="Awaiter"/>.
-            /// </summary>
-            public void OnCompleted(Action continuation)
-            {
-                GDTaskScheduler.AddContinuation(PlayerLoopTiming.DeferredProcess, continuation);
-            }
 
             /// <summary>
-            /// Schedules the continuation onto the <see cref="YieldAwaitable"/> associated with this <see cref="Awaiter"/>.
+            /// Schedules the continuation onto the <see cref="YieldAwaitable" /> associated with this <see cref="Awaiter" />.
             /// </summary>
-            public void UnsafeOnCompleted(Action continuation)
-            {
-                GDTaskScheduler.AddContinuation(PlayerLoopTiming.DeferredProcess, continuation);
-            }
+            public void OnCompleted(Action continuation) => GDTaskScheduler.AddContinuation(PlayerLoopTiming.DeferredProcess, continuation);
+
+            /// <summary>
+            /// Schedules the continuation onto the <see cref="YieldAwaitable" /> associated with this <see cref="Awaiter" />.
+            /// </summary>
+            public void UnsafeOnCompleted(Action continuation) => GDTaskScheduler.AddContinuation(PlayerLoopTiming.DeferredProcess, continuation);
         }
     }
 }

@@ -1,37 +1,33 @@
 ﻿using System;
 using System.Diagnostics;
 
-namespace GodotTask.Internal
+namespace GodotTask.Internal;
+
+readonly struct ValueStopwatch
 {
-    internal readonly struct ValueStopwatch
+    private static readonly double TimestampToTicks = TimeSpan.TicksPerSecond / (double)Stopwatch.Frequency;
+
+    private readonly long _startTimestamp;
+
+    public static ValueStopwatch StartNew() => new(Stopwatch.GetTimestamp());
+
+    private ValueStopwatch(long startTimestamp)
     {
-        private static readonly double TimestampToTicks = TimeSpan.TicksPerSecond / (double)Stopwatch.Frequency;
+        _startTimestamp = startTimestamp;
+    }
 
-        private readonly long startTimestamp;
+    public TimeSpan Elapsed => TimeSpan.FromTicks(ElapsedTicks);
 
-        public static ValueStopwatch StartNew() => new(Stopwatch.GetTimestamp());
+    public bool IsInvalid => _startTimestamp == 0;
 
-        private ValueStopwatch(long startTimestamp)
+    public long ElapsedTicks
+    {
+        get
         {
-            this.startTimestamp = startTimestamp;
-        }
+            if (_startTimestamp == 0) throw new InvalidOperationException("Detected invalid initialization - use 'StartNew()', not 'default'.");
 
-        public TimeSpan Elapsed => TimeSpan.FromTicks(ElapsedTicks);
-
-        public bool IsInvalid => startTimestamp == 0;
-
-        public long ElapsedTicks
-        {
-            get
-            {
-                if (startTimestamp == 0)
-                {
-                    throw new InvalidOperationException("Detected invalid initialization - use 'StartNew()', not 'default'.");
-                }
-
-                var delta = Stopwatch.GetTimestamp() - startTimestamp;
-                return (long)(delta * TimestampToTicks);
-            }
+            var delta = Stopwatch.GetTimestamp() - _startTimestamp;
+            return (long)(delta * TimestampToTicks);
         }
     }
 }

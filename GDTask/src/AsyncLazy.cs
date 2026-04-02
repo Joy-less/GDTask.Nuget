@@ -1,281 +1,248 @@
 ﻿using System;
 using System.Threading;
 
-namespace GodotTask
+namespace GodotTask;
+
+/// <summary>
+/// Provides access a lazy initialized of an asynchronous work.
+/// </summary>
+public interface IAsyncLazy
 {
     /// <summary>
-    /// Provides access a lazy initialized of an asynchronous work.
+    /// Access the initialized task.
     /// </summary>
-    public interface IAsyncLazy
-    {
-        /// <summary>
-        /// Access the initialized task.
-        /// </summary>
-        GDTask Task { get; }
-        
-        /// <summary>
-        /// Gets an awaiter used to await this <see cref="GDTask" />.
-        /// </summary>
-        GDTask.Awaiter GetAwaiter();
-    }
+    GDTask Task { get; }
 
-    /// <inheritdoc cref="IAsyncLazy"/>
-    public interface IAsyncLazy<T>
-    {
-        /// <inheritdoc cref="IAsyncLazy.Task"/>
-        GDTask<T> Task { get; }
-        
-        /// <inheritdoc cref="IAsyncLazy.GetAwaiter"/>
-        GDTask<T>.Awaiter GetAwaiter();
-    }
+    /// <summary>
+    /// Gets an awaiter used to await this <see cref="GDTask" />.
+    /// </summary>
+    GDTask.Awaiter GetAwaiter();
+}
 
-    internal class AsyncLazy : IAsyncLazy
-    {
-        private Func<GDTask> taskFactory;
-        private readonly GDTaskCompletionSource completionSource;
-        private GDTask.Awaiter awaiter;
+/// <inheritdoc cref="IAsyncLazy" />
+public interface IAsyncLazy<T>
+{
+    /// <inheritdoc cref="IAsyncLazy.Task" />
+    GDTask<T> Task { get; }
+
+    /// <inheritdoc cref="IAsyncLazy.GetAwaiter" />
+    GDTask<T>.Awaiter GetAwaiter();
+}
+
+class AsyncLazy : IAsyncLazy
+{
+    private Func<GDTask> _taskFactory;
+    private readonly GDTaskCompletionSource _completionSource;
+    private GDTask.Awaiter _awaiter;
 
 #if NET9_0_OR_GREATER
-        private readonly Lock syncLock;
+    private readonly Lock _syncLock;
 #else
-        private readonly object syncLock;
+    private readonly object _syncLock;
 #endif
-        private bool initialized;
+    private bool _initialized;
 
-        public AsyncLazy(Func<GDTask> taskFactory)
-        {
-            this.taskFactory = taskFactory;
-            completionSource = new GDTaskCompletionSource();
+    public AsyncLazy(Func<GDTask> taskFactory)
+    {
+        _taskFactory = taskFactory;
+        _completionSource = new();
 #if NET9_0_OR_GREATER
-            syncLock = new Lock();
+            _syncLock = new();
 #else
-            syncLock = new object();
+        _syncLock = new();
 #endif
-            initialized = false;
-        }
+        _initialized = false;
+    }
 
-        internal AsyncLazy(GDTask task)
+    internal AsyncLazy(GDTask task)
+    {
+        _taskFactory = null;
+        _completionSource = new();
+        _syncLock = null;
+        _initialized = true;
+
+        var awaiter = task.GetAwaiter();
+
+        if (awaiter.IsCompleted) SetCompletionSource(awaiter);
+        else
         {
-            taskFactory = null;
-            completionSource = new GDTaskCompletionSource();
-            syncLock = null;
-            initialized = true;
-
-            var awaiter = task.GetAwaiter();
-            if (awaiter.IsCompleted)
-            {
-                SetCompletionSource(awaiter);
-            }
-            else
-            {
-                this.awaiter = awaiter;
-                awaiter.SourceOnCompleted(SetCompletionSource, this);
-            }
+            _awaiter = awaiter;
+            awaiter.SourceOnCompleted(SetCompletionSource, this);
         }
+    }
 
-        public GDTask Task
+    public GDTask Task
+    {
+        get
         {
-            get
-            {
-                EnsureInitialized();
-                return completionSource.Task;
-            }
+            EnsureInitialized();
+            return _completionSource.Task;
         }
+    }
 
 
-        public GDTask.Awaiter GetAwaiter() => Task.GetAwaiter();
+    public GDTask.Awaiter GetAwaiter() => Task.GetAwaiter();
 
-        private void EnsureInitialized()
+    private void EnsureInitialized()
+    {
+        if (Volatile.Read(ref _initialized)) return;
+
+        EnsureInitializedCore();
+    }
+
+    private void EnsureInitializedCore()
+    {
+        lock (_syncLock)
         {
-            if (Volatile.Read(ref initialized))
+            if (!Volatile.Read(ref _initialized))
             {
-                return;
-            }
+                var f = Interlocked.Exchange(ref _taskFactory, null);
 
-            EnsureInitializedCore();
-        }
-
-        private void EnsureInitializedCore()
-        {
-            lock (syncLock)
-            {
-                if (!Volatile.Read(ref initialized))
+                if (f != null)
                 {
-                    var f = Interlocked.Exchange(ref taskFactory, null);
-                    if (f != null)
-                    {
-                        var task = f();
-                        var awaiter = task.GetAwaiter();
-                        if (awaiter.IsCompleted)
-                        {
-                            SetCompletionSource(awaiter);
-                        }
-                        else
-                        {
-                            this.awaiter = awaiter;
-                            awaiter.SourceOnCompleted(SetCompletionSource, this);
-                        }
+                    var task = f();
+                    var awaiter = task.GetAwaiter();
 
-                        Volatile.Write(ref initialized, true);
+                    if (awaiter.IsCompleted) SetCompletionSource(awaiter);
+                    else
+                    {
+                        _awaiter = awaiter;
+                        awaiter.SourceOnCompleted(SetCompletionSource, this);
                     }
+
+                    Volatile.Write(ref _initialized, true);
                 }
             }
         }
+    }
 
-        private void SetCompletionSource(in GDTask.Awaiter awaiter)
+    private void SetCompletionSource(in GDTask.Awaiter awaiter)
+    {
+        try
         {
-            try
-            {
-                awaiter.GetResult();
-                completionSource.TrySetResult();
-            }
-            catch (Exception ex)
-            {
-                completionSource.TrySetException(ex);
-            }
+            awaiter.GetResult();
+            _completionSource.TrySetResult();
         }
+        catch (Exception ex) { _completionSource.TrySetException(ex); }
+    }
 
-        private static void SetCompletionSource(object state)
+    private static void SetCompletionSource(object state)
+    {
+        var self = (AsyncLazy)state;
+
+        try
         {
-            var self = (AsyncLazy)state;
-            try
+            self._awaiter.GetResult();
+            self._completionSource.TrySetResult();
+        }
+        catch (Exception ex) { self._completionSource.TrySetException(ex); }
+        finally { self._awaiter = default; }
+    }
+}
+
+class AsyncLazy<T> : IAsyncLazy<T>
+{
+    private Func<GDTask<T>> _taskFactory;
+    private readonly GDTaskCompletionSource<T> _completionSource;
+    private GDTask<T>.Awaiter _awaiter;
+
+#if NET9_0_OR_GREATER
+    private readonly Lock _syncLock;
+#else
+    private readonly object _syncLock;
+#endif
+    private bool _initialized;
+
+    public AsyncLazy(Func<GDTask<T>> taskFactory)
+    {
+        _taskFactory = taskFactory;
+        _completionSource = new();
+        _syncLock = new();
+        _initialized = false;
+    }
+
+    internal AsyncLazy(GDTask<T> task)
+    {
+        _taskFactory = null;
+        _completionSource = new();
+        _syncLock = null;
+        _initialized = true;
+
+        var awaiter = task.GetAwaiter();
+
+        if (awaiter.IsCompleted) SetCompletionSource(awaiter);
+        else
+        {
+            _awaiter = awaiter;
+            awaiter.SourceOnCompleted(SetCompletionSource, this);
+        }
+    }
+
+    public GDTask<T> Task
+    {
+        get
+        {
+            EnsureInitialized();
+            return _completionSource.Task;
+        }
+    }
+
+
+    public GDTask<T>.Awaiter GetAwaiter() => Task.GetAwaiter();
+
+    private void EnsureInitialized()
+    {
+        if (Volatile.Read(ref _initialized)) return;
+
+        EnsureInitializedCore();
+    }
+
+    private void EnsureInitializedCore()
+    {
+        lock (_syncLock)
+        {
+            if (!Volatile.Read(ref _initialized))
             {
-                self.awaiter.GetResult();
-                self.completionSource.TrySetResult();
-            }
-            catch (Exception ex)
-            {
-                self.completionSource.TrySetException(ex);
-            }
-            finally
-            {
-                self.awaiter = default;
+                var f = Interlocked.Exchange(ref _taskFactory, null);
+
+                if (f != null)
+                {
+                    var task = f();
+                    var awaiter = task.GetAwaiter();
+
+                    if (awaiter.IsCompleted) SetCompletionSource(awaiter);
+                    else
+                    {
+                        _awaiter = awaiter;
+                        awaiter.SourceOnCompleted(SetCompletionSource, this);
+                    }
+
+                    Volatile.Write(ref _initialized, true);
+                }
             }
         }
     }
 
-    internal class AsyncLazy<T> : IAsyncLazy<T>
+    private void SetCompletionSource(in GDTask<T>.Awaiter awaiter)
     {
-        private Func<GDTask<T>> taskFactory;
-        private readonly GDTaskCompletionSource<T> completionSource;
-        private GDTask<T>.Awaiter awaiter;
-
-#if NET9_0_OR_GREATER
-        private readonly Lock syncLock;
-#else
-        private readonly object syncLock;
-#endif
-        private bool initialized;
-
-        public AsyncLazy(Func<GDTask<T>> taskFactory)
+        try
         {
-            this.taskFactory = taskFactory;
-            completionSource = new GDTaskCompletionSource<T>();
-#if NET9_0_OR_GREATER
-            syncLock = new Lock();
-#else
-            syncLock = new object();
-#endif
-            initialized = false;
+            var result = awaiter.GetResult();
+            _completionSource.TrySetResult(result);
         }
+        catch (Exception ex) { _completionSource.TrySetException(ex); }
+    }
 
-        internal AsyncLazy(GDTask<T> task)
+    private static void SetCompletionSource(object state)
+    {
+        var self = (AsyncLazy<T>)state;
+
+        try
         {
-            taskFactory = null;
-            completionSource = new GDTaskCompletionSource<T>();
-            syncLock = null;
-            initialized = true;
-
-            var awaiter = task.GetAwaiter();
-            if (awaiter.IsCompleted)
-            {
-                SetCompletionSource(awaiter);
-            }
-            else
-            {
-                this.awaiter = awaiter;
-                awaiter.SourceOnCompleted(SetCompletionSource, this);
-            }
+            var result = self._awaiter.GetResult();
+            self._completionSource.TrySetResult(result);
         }
-
-        public GDTask<T> Task
-        {
-            get
-            {
-                EnsureInitialized();
-                return completionSource.Task;
-            }
-        }
-
-
-        public GDTask<T>.Awaiter GetAwaiter() => Task.GetAwaiter();
-
-        private void EnsureInitialized()
-        {
-            if (Volatile.Read(ref initialized))
-            {
-                return;
-            }
-
-            EnsureInitializedCore();
-        }
-
-        private void EnsureInitializedCore()
-        {
-            lock (syncLock)
-            {
-                if (!Volatile.Read(ref initialized))
-                {
-                    var f = Interlocked.Exchange(ref taskFactory, null);
-                    if (f != null)
-                    {
-                        var task = f();
-                        var awaiter = task.GetAwaiter();
-                        if (awaiter.IsCompleted)
-                        {
-                            SetCompletionSource(awaiter);
-                        }
-                        else
-                        {
-                            this.awaiter = awaiter;
-                            awaiter.SourceOnCompleted(SetCompletionSource, this);
-                        }
-
-                        Volatile.Write(ref initialized, true);
-                    }
-                }
-            }
-        }
-
-        private void SetCompletionSource(in GDTask<T>.Awaiter awaiter)
-        {
-            try
-            {
-                var result = awaiter.GetResult();
-                completionSource.TrySetResult(result);
-            }
-            catch (Exception ex)
-            {
-                completionSource.TrySetException(ex);
-            }
-        }
-
-        private static void SetCompletionSource(object state)
-        {
-            var self = (AsyncLazy<T>)state;
-            try
-            {
-                var result = self.awaiter.GetResult();
-                self.completionSource.TrySetResult(result);
-            }
-            catch (Exception ex)
-            {
-                self.completionSource.TrySetException(ex);
-            }
-            finally
-            {
-                self.awaiter = default;
-            }
-        }
+        catch (Exception ex) { self._completionSource.TrySetException(ex); }
+        finally { self._awaiter = default; }
     }
 }

@@ -5,101 +5,82 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security;
 
-namespace GodotTask.CompilerServices
+namespace GodotTask.CompilerServices;
+
+[StructLayout(LayoutKind.Auto)]
+public struct AsyncGDTaskVoidMethodBuilder
 {
-    [StructLayout(LayoutKind.Auto)]
-    public struct AsyncGDTaskVoidMethodBuilder
+    private IStateMachineRunner _runner;
+
+    // 1. Static Create method.
+    [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static AsyncGDTaskVoidMethodBuilder Create() => default;
+
+    // 2. TaskLike Task property(void)
+    public readonly GDTaskVoid Task
     {
-        private IStateMachineRunner runner;
+        [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => default;
+    }
 
-        // 1. Static Create method.
-        [DebuggerHidden]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static AsyncGDTaskVoidMethodBuilder Create()
+    // 3. SetException
+    [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void SetException(Exception exception)
+    {
+        // runner is finished, return first.
+        if (_runner != null)
         {
-            return default;
+            _runner.Return();
+            _runner = null;
         }
 
-        // 2. TaskLike Task property(void)
-        public readonly GDTaskVoid Task
+        GDTaskExceptionHandler.PublishUnobservedTaskException(exception);
+    }
+
+    // 4. SetResult
+    [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void SetResult()
+    {
+        // runner is finished, return.
+        if (_runner != null)
         {
-            [DebuggerHidden]
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            get => default;
+            _runner.Return();
+            _runner = null;
         }
+    }
 
-        // 3. SetException
-        [DebuggerHidden]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetException(Exception exception)
-        {
-            // runner is finished, return first.
-            if (runner != null)
-            {
-                runner.Return();
-                runner = null;
-            }
+    // 5. AwaitOnCompleted
+    [DebuggerHidden, MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void AwaitOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
+        where TAwaiter : INotifyCompletion
+        where TStateMachine : IAsyncStateMachine
+    {
+        if (_runner == null) AsyncGDTaskVoid<TStateMachine>.SetStateMachine(ref stateMachine, ref _runner);
 
-            GDTaskExceptionHandler.PublishUnobservedTaskException(exception);
-        }
+        awaiter.OnCompleted(_runner.MoveNext);
+    }
 
-        // 4. SetResult
-        [DebuggerHidden]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetResult()
-        {
-            // runner is finished, return.
-            if (runner != null)
-            {
-                runner.Return();
-                runner = null;
-            }
-        }
+    // 6. AwaitUnsafeOnCompleted
+    [DebuggerHidden, SecuritySafeCritical, MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void AwaitUnsafeOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
+        where TAwaiter : ICriticalNotifyCompletion
+        where TStateMachine : IAsyncStateMachine
+    {
+        if (_runner == null) AsyncGDTaskVoid<TStateMachine>.SetStateMachine(ref stateMachine, ref _runner);
 
-        // 5. AwaitOnCompleted
-        [DebuggerHidden]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AwaitOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
-            where TAwaiter : INotifyCompletion
-            where TStateMachine : IAsyncStateMachine
-        {
-            if (runner == null)
-            {
-                AsyncGDTaskVoid<TStateMachine>.SetStateMachine(ref stateMachine, ref runner);
-            }
+        awaiter.UnsafeOnCompleted(_runner.MoveNext);
+    }
 
-            awaiter.OnCompleted(runner.MoveNext);
-        }
+    // 7. Start
+    [DebuggerHidden]
+    public void Start<TStateMachine>(ref TStateMachine stateMachine)
+        where TStateMachine : IAsyncStateMachine =>
+        stateMachine.MoveNext();
 
-        // 6. AwaitUnsafeOnCompleted
-        [DebuggerHidden]
-        [SecuritySafeCritical]
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void AwaitUnsafeOnCompleted<TAwaiter, TStateMachine>(ref TAwaiter awaiter, ref TStateMachine stateMachine)
-            where TAwaiter : ICriticalNotifyCompletion
-            where TStateMachine : IAsyncStateMachine
-        {
-            if (runner == null)
-            {
-                AsyncGDTaskVoid<TStateMachine>.SetStateMachine(ref stateMachine, ref runner);
-            }
-
-            awaiter.UnsafeOnCompleted(runner.MoveNext);
-        }
-
-        // 7. Start
-        [DebuggerHidden]
-        public void Start<TStateMachine>(ref TStateMachine stateMachine)
-            where TStateMachine : IAsyncStateMachine
-        {
-            stateMachine.MoveNext();
-        }
-
-        // 8. SetStateMachine
-        [DebuggerHidden]
-        public void SetStateMachine(IAsyncStateMachine stateMachine)
-        {
-            // don't use boxed stateMachine.
-        }
+    // 8. SetStateMachine
+    [DebuggerHidden]
+    public void SetStateMachine(IAsyncStateMachine stateMachine)
+    {
+        // don't use boxed stateMachine.
     }
 }

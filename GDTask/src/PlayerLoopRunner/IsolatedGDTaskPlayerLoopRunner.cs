@@ -2,10 +2,10 @@
 
 namespace GodotTask;
 
-internal partial class IsolatedGDTaskPlayerLoopRunner : Node
+partial class IsolatedGDTaskPlayerLoopRunner : Node
 {
-    private readonly PlayerLoopProxy _isolatedProcessProxy;
     private readonly PlayerLoopProxy _isolatedPhysicsProcessProxy;
+    private readonly PlayerLoopProxy _isolatedProcessProxy;
 
     public IsolatedGDTaskPlayerLoopRunner(PlayerLoopProxy isolatedProcessProxy, PlayerLoopProxy isolatedPhysicsProcessProxy)
     {
@@ -17,9 +17,9 @@ internal partial class IsolatedGDTaskPlayerLoopRunner : Node
     public sealed override void _Process(double delta) =>
         _isolatedProcessProxy.NotifyProcess(delta);
 
-    public sealed override void _PhysicsProcess(double delta) => 
+    public sealed override void _PhysicsProcess(double delta) =>
         _isolatedPhysicsProcessProxy.NotifyProcess(delta);
-    
+
     public override void _Notification(int what)
     {
         if (what != NotificationPredelete) return;

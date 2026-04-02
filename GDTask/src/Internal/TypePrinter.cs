@@ -5,15 +5,15 @@ using System.Text;
 
 namespace GodotTask.Internal;
 
-internal class TypePrinter
+class TypePrinter
 {
-    [ThreadStatic] private static StringBuilder? _typeNameBuilder;
-    private static readonly HashSet<Type>? _tupleTypeSet;
-    private static readonly Dictionary<Type, string>? _builtinTypeNameDictionary;
+    [ThreadStatic] private static StringBuilder? TypeNameBuilder;
+    private static readonly HashSet<Type>? TupleTypeSet;
+    private static readonly Dictionary<Type, string>? BuiltinTypeNameDictionary;
 
     static TypePrinter()
     {
-        _tupleTypeSet =
+        TupleTypeSet =
         [
             typeof(ValueTuple<,>),
             typeof(ValueTuple<,,>),
@@ -21,10 +21,10 @@ internal class TypePrinter
             typeof(ValueTuple<,,,,>),
             typeof(ValueTuple<,,,,,>),
             typeof(ValueTuple<,,,,,,>),
-            typeof(ValueTuple<,,,,,,,>)
+            typeof(ValueTuple<,,,,,,,>),
         ];
 
-        _builtinTypeNameDictionary ??= new()
+        BuiltinTypeNameDictionary ??= new()
         {
             { typeof(sbyte), "sbyte" },
             { typeof(byte), "byte" },
@@ -45,23 +45,20 @@ internal class TypePrinter
             { typeof(object), "object" },
         };
     }
-    
+
     internal static string ConstructTypeName(Type? type)
     {
         // return type.Name; <=== Implement Conditional Compiling
-        
+
         // Down below is the method for printing the type definition in editor
 
         if (type is null) return string.Empty;
-        
-        if (type is { IsArray: false, IsGenericType: false })
-        {
-            return GetSimpleTypeName(type);
-        }
 
-        _typeNameBuilder ??= new StringBuilder();
+        if (type is { IsArray: false, IsGenericType: false }) return GetSimpleTypeName(type);
 
-        var sb = _typeNameBuilder;
+        TypeNameBuilder ??= new();
+
+        var sb = TypeNameBuilder;
         AppendType(sb, type);
         var result = sb.ToString();
         sb.Clear();
@@ -69,28 +66,16 @@ internal class TypePrinter
 
         static void AppendType(StringBuilder sb, Type type)
         {
-            if (type.IsArray)
-            {
-                AppendArray(sb, type);
-            }
-            else if (type.IsGenericType)
-            {
-                AppendGeneric(sb, type);
-            }
-            else
-            {
-                sb.Append(GetSimpleTypeName(type));
-            }
+            if (type.IsArray) AppendArray(sb, type);
+            else if (type.IsGenericType) AppendGeneric(sb, type);
+            else sb.Append(GetSimpleTypeName(type));
         }
 
         static void AppendArray(StringBuilder sb, Type type)
         {
             // append inner most non-array element
             var elementType = type.GetElementType()!;
-            while (elementType.IsArray)
-            {
-                elementType = elementType.GetElementType()!;
-            }
+            while (elementType.IsArray) elementType = elementType.GetElementType()!;
 
             AppendType(sb, elementType);
             // append brackets
@@ -108,6 +93,7 @@ internal class TypePrinter
                     sb.Append(']');
                     //recursive call
                     var elementType = type.GetElementType()!;
+
                     if (elementType.IsArray)
                     {
                         type = elementType;
@@ -124,6 +110,7 @@ internal class TypePrinter
 
             var genericArgs = type.GenericTypeArguments;
             var genericDefinition = type.GetGenericTypeDefinition();
+
             //Nullable
             if (genericDefinition == typeof(Nullable<>))
             {
@@ -133,9 +120,10 @@ internal class TypePrinter
             }
 
             //ValueTuple
-            if (_tupleTypeSet!.Contains(genericDefinition))
+            if (TupleTypeSet!.Contains(genericDefinition))
             {
                 sb.Append('(');
+
                 while (true)
                 {
                     // We assume that ValueTuple has 1~8 elements.
@@ -147,17 +135,16 @@ internal class TypePrinter
                         AppendParamTypes(sb, genericArgs);
                         break;
                     }
-                    else
-                    {
-                        AppendParamTypes(sb, genericArgs.AsSpan(0, 7));
-                        sb.Append(", ");
 
-                        // TRest should be a ValueTuple!
-                        var nextTuple = genericArgs[7];
+                    AppendParamTypes(sb, genericArgs.AsSpan(0, 7));
+                    sb.Append(", ");
 
-                        genericArgs = nextTuple.GenericTypeArguments;
-                    }
+                    // TRest should be a ValueTuple!
+                    var nextTuple = genericArgs[7];
+
+                    genericArgs = nextTuple.GenericTypeArguments;
                 }
+
                 sb.Append(')');
                 return;
             }
@@ -173,7 +160,8 @@ internal class TypePrinter
             static void AppendParamTypes(StringBuilder sb, ReadOnlySpan<Type> genericArgs)
             {
                 var n = genericArgs.Length - 1;
-                for (int i = 0; i < n; i += 1)
+
+                for (var i = 0; i < n; i += 1)
                 {
                     AppendType(sb, genericArgs[i]);
                     sb.Append(", ");
@@ -185,7 +173,7 @@ internal class TypePrinter
 
         static string GetSimpleTypeName(Type type)
         {
-            return _builtinTypeNameDictionary!.TryGetValue(type, out var name) ? name : type.Name;
+            return BuiltinTypeNameDictionary!.TryGetValue(type, out var name) ? name : type.Name;
         }
     }
 }

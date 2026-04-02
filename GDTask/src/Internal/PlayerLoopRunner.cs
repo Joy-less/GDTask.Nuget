@@ -1,173 +1,143 @@
-﻿using Godot;
-using System;
-using System.Threading;
+﻿using System;
+using System.Collections.Generic;
+using Godot;
 
-namespace GodotTask.Internal
+namespace GodotTask.Internal;
+
+sealed class PlayerLoopRunner
 {
-    internal sealed class PlayerLoopRunner
-    {
-        private const int InitialSize = 16;
+    private const int InitialSize = 16;
 
 #if NET9_0_OR_GREATER
-        private readonly Lock runningAndQueueLock = new();
-        private readonly Lock arrayLock = new();
+    private readonly System.Threading.Lock _runningAndQueueLock = new();
+    private readonly System.Threading.Lock _arrayLock = new();
 #else
-        private readonly object runningAndQueueLock = new();
-        private readonly object arrayLock = new();
+    private readonly object _runningAndQueueLock = new();
+    private readonly object _arrayLock = new();
 #endif
-        private readonly Action<Exception> unhandledExceptionCallback = ex => GD.PrintErr(ex);
+    private readonly Action<Exception> _unhandledExceptionCallback = ex => GD.PrintErr(ex);
 
-        private int tail = 0;
-        private bool running = false;
-        private IPlayerLoopItem[] loopItems = new IPlayerLoopItem[InitialSize];
-        private readonly MinimumQueue<IPlayerLoopItem> waitQueue = new(InitialSize);
+    private int _tail;
+    private bool _running;
+    private IPlayerLoopItem[] _loopItems = new IPlayerLoopItem[InitialSize];
+    private readonly Queue<IPlayerLoopItem> _waitQueue = new(InitialSize);
 
-        public void AddAction(IPlayerLoopItem item)
+    public void AddAction(IPlayerLoopItem item)
+    {
+        lock (_runningAndQueueLock)
         {
-            lock (runningAndQueueLock)
+            if (_running)
             {
-                if (running)
-                {
-                    waitQueue.Enqueue(item);
-                    return;
-                }
-            }
-
-            lock (arrayLock)
-            {
-                // Ensure Capacity
-                if (loopItems.Length == tail)
-                {
-                    Array.Resize(ref loopItems, checked(tail * 2));
-                }
-                loopItems[tail++] = item;
+                _waitQueue.Enqueue(item);
+                return;
             }
         }
 
-        public int Clear()
+        lock (_arrayLock)
         {
-            lock (arrayLock)
-            {
-                var rest = 0;
+            // Ensure Capacity
+            if (_loopItems.Length == _tail) Array.Resize(ref _loopItems, checked(_tail * 2));
+            _loopItems[_tail++] = item;
+        }
+    }
 
-                for (var index = 0; index < loopItems.Length; index++)
-                {
-                    if (loopItems[index] != null)
+    public int Clear()
+    {
+        lock (_arrayLock)
+        {
+            var rest = 0;
+
+            for (var index = 0; index < _loopItems.Length; index++)
+            {
+                if (_loopItems[index] != null) rest++;
+
+                _loopItems[index] = null;
+            }
+
+            _tail = 0;
+            return rest;
+        }
+    }
+
+    // Delegate entrypoint.
+    public void Run(double deltaTime)
+    {
+        lock (_runningAndQueueLock) { _running = true; }
+
+        lock (_arrayLock)
+        {
+            var j = _tail - 1;
+
+            var loopItemSpan = _loopItems.AsSpan();
+
+            for (var i = 0; i < loopItemSpan.Length; i++)
+            {
+                var action = loopItemSpan[i];
+
+                if (action != null)
+                    try
                     {
-                        rest++;
+                        if (!action.MoveNext(deltaTime)) loopItemSpan[i] = null;
+                        else continue; // next i 
+                    }
+                    catch (Exception ex)
+                    {
+                        loopItemSpan[i] = null;
+
+                        try { _unhandledExceptionCallback(ex); }
+                        catch { }
                     }
 
-                    loopItems[index] = null;
-                }
-
-                tail = 0;
-                return rest;
-            }
-        }
-
-        // Delegate entrypoint.
-        public void Run(double deltaTime)
-        {
-            lock (runningAndQueueLock)
-            {
-                running = true;
-            }
-
-            lock (arrayLock)
-            {
-                var j = tail - 1;
-
-                var loopItemSpan = loopItems.AsSpan();
-                for (int i = 0; i < loopItemSpan.Length; i++)
+                // find null, loop from tail
+                while (i < j)
                 {
-                    var action = loopItemSpan[i];
-                    if (action != null)
-                    {
+                    var fromTail = loopItemSpan[j];
+
+                    if (fromTail != null)
                         try
                         {
-                            if (!action.MoveNext(deltaTime))
+                            if (!fromTail.MoveNext(deltaTime))
                             {
-                                loopItemSpan[i] = null;
+                                loopItemSpan[j] = null;
+                                j--;
                             }
                             else
                             {
-                                continue; // next i 
+                                // swap
+                                loopItemSpan[i] = fromTail;
+                                loopItemSpan[j] = null;
+                                j--;
+                                goto NEXT_LOOP; // next i
                             }
                         }
                         catch (Exception ex)
                         {
-                            loopItemSpan[i] = null;
-                            try
-                            {
-                                unhandledExceptionCallback(ex);
-                            }
+                            loopItemSpan[j] = null;
+                            j--;
+
+                            try { _unhandledExceptionCallback(ex); }
                             catch { }
                         }
-                    }
-
-                    // find null, loop from tail
-                    while (i < j)
-                    {
-                        var fromTail = loopItemSpan[j];
-                        if (fromTail != null)
-                        {
-                            try
-                            {
-                                if (!fromTail.MoveNext(deltaTime))
-                                {
-                                    loopItemSpan[j] = null;
-                                    j--;
-                                    continue; // next j
-                                }
-                                else
-                                {
-                                    // swap
-                                    loopItemSpan[i] = fromTail;
-                                    loopItemSpan[j] = null;
-                                    j--;
-                                    goto NEXT_LOOP; // next i
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                loopItemSpan[j] = null;
-                                j--;
-                                try
-                                {
-                                    unhandledExceptionCallback(ex);
-                                }
-                                catch { }
-                                continue; // next j
-                            }
-                        }
-                        else
-                        {
-                            j--;
-                        }
-                    }
-
-                    tail = i; // loop end
-                    break; // LOOP END
-
-                    NEXT_LOOP:
-                    continue;
+                    else j--;
                 }
 
+                _tail = i; // loop end
+                break; // LOOP END
 
-                lock (runningAndQueueLock)
+                NEXT_LOOP: ;
+            }
+
+
+            lock (_runningAndQueueLock)
+            {
+                _running = false;
+
+                while (_waitQueue.Count != 0)
                 {
-                    running = false;
-                    while (waitQueue.Count != 0)
-                    {
-                        if (loopItems.Length == tail)
-                        {
-                            Array.Resize(ref loopItems, checked(tail * 2));
-                        }
-                        loopItems[tail++] = waitQueue.Dequeue();
-                    }
+                    if (_loopItems.Length == _tail) Array.Resize(ref _loopItems, checked(_tail * 2));
+                    _loopItems[_tail++] = _waitQueue.Dequeue();
                 }
             }
         }
     }
 }
-

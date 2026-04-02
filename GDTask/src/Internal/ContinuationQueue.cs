@@ -1,133 +1,131 @@
-﻿using Godot;
-using System;
+﻿using System;
 using System.Threading;
+using Godot;
 
-namespace GodotTask.Internal
+namespace GodotTask.Internal;
+
+sealed class ContinuationQueue
 {
-    internal sealed class ContinuationQueue
+    private const int MaxArrayLength = 0X7FEFFFFF;
+    private const int InitialSize = 16;
+    private Action[] _actionList = new Action[InitialSize];
+
+    private int _actionListCount;
+    private bool _dequeuing;
+
+    private SpinLock _gate = new(false);
+    private Action[] _waitingList = new Action[InitialSize];
+
+    private int _waitingListCount;
+
+    public void Enqueue(Action continuation)
     {
-        private const int MaxArrayLength = 0X7FEFFFFF;
-        private const int InitialSize = 16;
+        var lockTaken = false;
 
-        private SpinLock gate = new(false);
-        private bool dequeuing = false;
-
-        private int actionListCount = 0;
-        private Action[] actionList = new Action[InitialSize];
-
-        private int waitingListCount = 0;
-        private Action[] waitingList = new Action[InitialSize];
-        
-        public void Enqueue(Action continuation)
+        try
         {
-            bool lockTaken = false;
+            _gate.Enter(ref lockTaken);
+
+            if (_dequeuing)
+            {
+                // Ensure Capacity
+                if (_waitingList.Length == _waitingListCount)
+                {
+                    var newLength = _waitingListCount * 2;
+                    if ((uint)newLength > MaxArrayLength) newLength = MaxArrayLength;
+
+                    var newArray = new Action[newLength];
+                    Array.Copy(_waitingList, newArray, _waitingListCount);
+                    _waitingList = newArray;
+                }
+
+                _waitingList[_waitingListCount] = continuation;
+                _waitingListCount++;
+            }
+            else
+            {
+                // Ensure Capacity
+                if (_actionList.Length == _actionListCount)
+                {
+                    var newLength = _actionListCount * 2;
+                    if ((uint)newLength > MaxArrayLength) newLength = MaxArrayLength;
+
+                    var newArray = new Action[newLength];
+                    Array.Copy(_actionList, newArray, _actionListCount);
+                    _actionList = newArray;
+                }
+
+                _actionList[_actionListCount] = continuation;
+                _actionListCount++;
+            }
+        }
+        finally
+        {
+            if (lockTaken) _gate.Exit(false);
+        }
+    }
+
+    public int Clear()
+    {
+        var rest = _actionListCount + _waitingListCount;
+
+        _actionListCount = 0;
+        _actionList = new Action[InitialSize];
+
+        _waitingListCount = 0;
+        _waitingList = new Action[InitialSize];
+
+        return rest;
+    }
+
+    // Delegate entrypoint.
+    public void Run(double deltaTime)
+    {
+        {
+            var lockTaken = false;
+
             try
             {
-                gate.Enter(ref lockTaken);
-
-                if (dequeuing)
-                {
-                    // Ensure Capacity
-                    if (waitingList.Length == waitingListCount)
-                    {
-                        var newLength = waitingListCount * 2;
-                        if ((uint)newLength > MaxArrayLength) newLength = MaxArrayLength;
-
-                        var newArray = new Action[newLength];
-                        Array.Copy(waitingList, newArray, waitingListCount);
-                        waitingList = newArray;
-                    }
-                    waitingList[waitingListCount] = continuation;
-                    waitingListCount++;
-                }
-                else
-                {
-                    // Ensure Capacity
-                    if (actionList.Length == actionListCount)
-                    {
-                        var newLength = actionListCount * 2;
-                        if ((uint)newLength > MaxArrayLength) newLength = MaxArrayLength;
-
-                        var newArray = new Action[newLength];
-                        Array.Copy(actionList, newArray, actionListCount);
-                        actionList = newArray;
-                    }
-                    actionList[actionListCount] = continuation;
-                    actionListCount++;
-                }
+                _gate.Enter(ref lockTaken);
+                if (_actionListCount == 0) return;
+                _dequeuing = true;
             }
             finally
             {
-                if (lockTaken) gate.Exit(false);
+                if (lockTaken) _gate.Exit(false);
             }
         }
 
-        public int Clear()
+        for (var i = 0; i < _actionListCount; i++)
         {
-            var rest = actionListCount + waitingListCount;
 
-            actionListCount = 0;
-            actionList = new Action[InitialSize];
+            var action = _actionList[i];
+            _actionList[i] = null;
 
-            waitingListCount = 0;
-            waitingList = new Action[InitialSize];
-
-            return rest;
+            try { action(); }
+            catch (Exception ex) { GD.PrintErr(ex); }
         }
 
-        // Delegate entrypoint.
-        public void Run(double deltaTime)
         {
+            var lockTaken = false;
+
+            try
             {
-                bool lockTaken = false;
-                try
-                {
-                    gate.Enter(ref lockTaken);
-                    if (actionListCount == 0) return;
-                    dequeuing = true;
-                }
-                finally
-                {
-                    if (lockTaken) gate.Exit(false);
-                }
+                _gate.Enter(ref lockTaken);
+                _dequeuing = false;
+
+                var swapTempActionList = _actionList;
+
+                _actionListCount = _waitingListCount;
+                _actionList = _waitingList;
+
+                _waitingListCount = 0;
+                _waitingList = swapTempActionList;
             }
-
-            for (int i = 0; i < actionListCount; i++)
+            finally
             {
-
-                var action = actionList[i];
-                actionList[i] = null;
-                try
-                {
-                    action();
-                }
-                catch (Exception ex)
-                {
-                    GD.PrintErr(ex);
-                }
-            }
-
-            {
-                bool lockTaken = false;
-                try
-                {
-                    gate.Enter(ref lockTaken);
-                    dequeuing = false;
-
-                    var swapTempActionList = actionList;
-
-                    actionListCount = waitingListCount;
-                    actionList = waitingList;
-
-                    waitingListCount = 0;
-                    waitingList = swapTempActionList;
-                }
-                finally
-                {
-                    if (lockTaken) gate.Exit(false);
-                }
+                if (lockTaken) _gate.Exit(false);
             }
         }
     }
 }
-

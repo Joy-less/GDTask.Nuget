@@ -5,69 +5,68 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using GodotTask.Internal;
 
-namespace GodotTask
+namespace GodotTask;
+
+/// <summary>
+/// A conditional component that tracks and logs active tasks.
+/// </summary>
+public static partial class TaskTracker
 {
+    private static int TrackingId;
+    internal static readonly ObservableProperty EnableTrackingObservable = new(false);
+    internal static readonly ObservableProperty EnableStackTraceObservable = new(true);
+
+    private static readonly ConditionalWeakTable<IGDTaskSource, TrackingData> Tracking = [];
     /// <summary>
-    /// A conditional component that tracks and logs active tasks.
+    /// Enable tracking for active tasks.
     /// </summary>
-    public static partial class TaskTracker
+    public static bool EnableTracking
     {
-        /// <summary>
-        /// Enable tracking for active tasks.
-        /// </summary>
-        public static bool EnableTracking { get => _enableTracking.Value; set => _enableTracking.Value = value; }
+        get => EnableTrackingObservable.Value;
+        set => EnableTrackingObservable.Value = value;
+    }
 
-        /// <summary>
-        /// Record StackTrace for tracked tasks.
-        /// </summary>
-        public static bool EnableStackTrace { get => _enableStackTrace.Value; set => _enableStackTrace.Value = value; }
+    /// <summary>
+    /// Record StackTrace for tracked tasks.
+    /// </summary>
+    public static bool EnableStackTrace
+    {
+        get => EnableStackTraceObservable.Value;
+        set => EnableStackTraceObservable.Value = value;
+    }
 
-        /// <summary>
-        /// Shows the task tracker window if not already.
-        /// </summary>
-        /// <remarks>
-        /// This also sets <see cref="EnableTracking"/> to true.
-        /// </remarks>
-        public static void ShowTrackerWindow()
-        {
-            EnableTracking = true;
-            TaskTrackerWindow.Launch();
-        }
+    /// <summary>
+    /// Shows the task tracker window if not already.
+    /// </summary>
+    /// <remarks>
+    /// This also sets <see cref="EnableTracking" /> to true.
+    /// </remarks>
+    public static void ShowTrackerWindow()
+    {
+        EnableTracking = true;
+        TaskTrackerWindow.Launch();
+    }
 
-        private static int trackingId = 0;
-        internal static readonly ObservableProperty _enableTracking = new(false);
-        internal static readonly ObservableProperty _enableStackTrace = new(true);
+    internal static void TrackActiveTask(IGDTaskSource task, int skipFrame)
+    {
+        if (!EnableTrackingObservable.Value) return;
+        var stackTrace = EnableStackTraceObservable.Value ? new StackTrace(skipFrame, true).ToString()[6..] : "";
+        var typeName = EnableStackTraceObservable.Value ? TypePrinter.ConstructTypeName(task.GetType()) : task.GetType().Name;
+        var trackingData = new TrackingData(typeName, Interlocked.Increment(ref TrackingId), DateTime.UtcNow, stackTrace, task.UnsafeGetStatus);
+        Tracking.AddOrUpdate(task, trackingData);
+        TaskTrackerWindow.TryAddItem(trackingData);
+    }
 
-        private static readonly ConditionalWeakTable<IGDTaskSource, TrackingData> tracking = [];
+    internal static void RemoveTracking(IGDTaskSource task)
+    {
+        if (!EnableTrackingObservable.Value) return;
+        if (!Tracking.TryGetValue(task, out var trackingData)) return;
+        Tracking.Remove(task);
+        TaskTrackerWindow.TryRemoveItem(trackingData);
+    }
 
-        internal static void TrackActiveTask(IGDTaskSource task, int skipFrame)
-        {
-            if (!_enableTracking.Value) return;
-            var stackTrace = _enableStackTrace.Value ? new StackTrace(skipFrame, true).ToString()[6..] : "";
-
-            string typeName;
-            if (_enableStackTrace.Value) typeName = TypePrinter.ConstructTypeName(task.GetType());
-            else typeName = task.GetType().Name;
-            var trackingData = new TrackingData(typeName, Interlocked.Increment(ref trackingId), DateTime.UtcNow, stackTrace, task.UnsafeGetStatus);
-            tracking.AddOrUpdate(task, trackingData);
-            TaskTrackerWindow.TryAddItem(trackingData);
-        }
-
-        internal static void RemoveTracking(IGDTaskSource task)
-        {
-            if (!_enableTracking.Value) return;
-            if (!tracking.TryGetValue(task, out var trackingData)) return;
-            tracking.Remove(task);
-            TaskTrackerWindow.TryRemoveItem(trackingData);
-        }
-
-        internal static IEnumerable<TrackingData> GetAllExistingTrackingData()
-        {
-            foreach (var (_, trackingData) in tracking)
-            {
-                yield return trackingData;
-            }
-        }
+    internal static IEnumerable<TrackingData> GetAllExistingTrackingData()
+    {
+        foreach (var (_, trackingData) in Tracking) yield return trackingData;
     }
 }
-

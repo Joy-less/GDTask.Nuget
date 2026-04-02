@@ -1,49 +1,53 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0</TargetFrameworks>
-    <EnableDynamicLoading>true</EnableDynamicLoading>
-    <LangVersion>14</LangVersion>
-    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Nullable>disable</Nullable>
-    <CopyAllFiles>true</CopyAllFiles>
-    <RootNamespace>GodotTask</RootNamespace>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <OutputPath>./nupkg</OutputPath>
-    <DebugType>portable</DebugType>
-    <IsTrimmable>true</IsTrimmable>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PropertyGroup>
+        <TargetFrameworks>net6.0;net7.0;net8.0;net9.0;net10.0</TargetFrameworks>
+        <EnableDynamicLoading>true</EnableDynamicLoading>
+        <LangVersion>14</LangVersion>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Nullable>disable</Nullable>
+        <CopyAllFiles>true</CopyAllFiles>
+        <RootNamespace>GodotTask</RootNamespace>
+        <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+        <OutputPath>./nupkg</OutputPath>
+        <DebugType>portable</DebugType>
+        <IsTrimmable>true</IsTrimmable>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
-    <Title>GDTask</Title>
-    <PackageId>GDTask</PackageId>
-    <PackageVersion>2.0.2</PackageVersion>
-    <Authors>DE-YU, Atlinx, Yoshifumi Kawai / Cysharp</Authors>
-    <Description>Provides an efficient async/await integration to Godot 4.1+</Description>
-    <PackageProjectUrl>https://www.nuget.org/packages/GDTask</PackageProjectUrl>
-    <PackageIcon>Logo.png</PackageIcon>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
-    <RepositoryUrl>https://github.com/Delsin-Yu/GDTask.Nuget</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
-    <PackageTags>Godot GDTask GodotTask Task Async</PackageTags>
-    <PackageReleaseNotes>
-      - Improved the robustness of AttachExternalCancellation pooling and fixed corner-case cancellation registration issues.
-    </PackageReleaseNotes>
-    <PackageLicenseFile>LICENSE</PackageLicenseFile>
-    
-    <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <Title>GDTask</Title>
+        <PackageId>GDTask</PackageId>
+        <PackageVersion>3.0.0</PackageVersion>
+        <Authors>DE-YU, Atlinx, Yoshifumi Kawai / Cysharp</Authors>
+        <Description>Provides efficient async/await integration for Godot .NET projects on .NET 6 through .NET 10 with a GodotSharp 4.1.0+ dependency floor</Description>
+        <PackageProjectUrl>https://www.nuget.org/packages/GDTask</PackageProjectUrl>
+        <PackageIcon>Logo.png</PackageIcon>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <RepositoryUrl>https://github.com/Delsin-Yu/GDTask.Nuget</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageTags>Godot GDTask GodotTask Task Async</PackageTags>
+        <PackageReleaseNotes>
+            - Breaking change: AsyncTriggers are no longer included in the main GDTask package.
+            - Support matrix: GDTask 3.0.0 targets .NET 6 through .NET 10 and depends on GodotSharp 4.1.0 or newer.
+            - Packaging: Godot.SourceGenerators remains build-only for GDTask and does not flow transitively to consumers; explicit higher GodotSharp overrides remain supported.
+            - Added customizable player loop support through IPlayerLoop-enabled overloads across scheduling and waiting APIs.
+            - Simplified AttachExternalCancellation internals by removing pooling and improving cancellation registration robustness.
+        </PackageReleaseNotes>
+        <PackageLicenseFile>LICENSE</PackageLicenseFile>
 
-    
-    <IsGodotToolsProject>true</IsGodotToolsProject>
-  </PropertyGroup>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
-  <ItemGroup>
-    <None Include="../Logo.png" Pack="true" PackagePath="\" />
-    <None Include="../README.md" Pack="true" PackagePath="\" />
-    <None Include="../LICENSE" Pack="true" PackagePath="\" />
-  </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="GodotSharp" Version="4.1.0"/>
-    <PackageReference Include="Godot.SourceGenerators" Version="4.1.0"/>
-  </ItemGroup>
+        <IsGodotToolsProject>true</IsGodotToolsProject>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="../Logo.png" Pack="true" PackagePath="\"/>
+        <None Include="../README.md" Pack="true" PackagePath="\"/>
+        <None Include="../LICENSE" Pack="true" PackagePath="\"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="GodotSharp" Version="4.1.0"/>
+        <PackageReference Include="Godot.SourceGenerators" Version="4.1.0"/>
+    </ItemGroup>
 </Project>

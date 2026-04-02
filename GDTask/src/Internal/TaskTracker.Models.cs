@@ -6,17 +6,11 @@ public static partial class TaskTracker
 {
     internal record TrackingData(string FormattedType, int TrackingId, DateTime AddTime, string StackTrace, Func<GDTaskStatus> StatusProvider);
 
-    internal class ObservableProperty : IObservable<bool>
+    internal class ObservableProperty(bool value) : IObservable<bool>
     {
-        public static implicit operator bool(ObservableProperty observableProperty)
-        {
-            return observableProperty._value;
-        }
+        private IObserver<bool> _singleSubscriber;
 
-        public ObservableProperty(bool value)
-        {
-            _value = value;
-        }
+        private bool _value = value;
 
         public bool Value
         {
@@ -32,10 +26,6 @@ public static partial class TaskTracker
             }
         }
 
-        private IObserver<bool> _singleSubscriber;
-
-        private bool _value;
-
         public IDisposable Subscribe(IObserver<bool> observer)
         {
             _singleSubscriber = observer;
@@ -43,13 +33,11 @@ public static partial class TaskTracker
             return new DisposeHandle(this);
         }
 
-        internal class DisposeHandle : IDisposable
+        public static implicit operator bool(ObservableProperty observableProperty) => observableProperty._value;
+
+        internal class DisposeHandle(ObservableProperty property) : IDisposable
         {
-            private readonly ObservableProperty _property;
-
-            public DisposeHandle(ObservableProperty property) => _property = property;
-
-            public void Dispose() => _property._singleSubscriber = null;
+            public void Dispose() => property._singleSubscriber = null;
         }
     }
 }
