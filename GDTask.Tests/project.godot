@@ -26,6 +26,7 @@ window/subwindows/embed_subwindows=false
 [dotnet]
 
 project/assembly_name="GDTask.Tests"
+project/solution_directory="../"
 
 [editor_plugins]
 
