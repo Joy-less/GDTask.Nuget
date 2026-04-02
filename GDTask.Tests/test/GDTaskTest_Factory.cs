@@ -53,6 +53,66 @@ public partial class GDTaskTest_Factory
     }
 
     [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_Lazy_FactoryThrowOnFirstCall_RetriesAndCompletes()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        var attempts = 0;
+        var lazy = GDTask.Lazy(() =>
+        {
+            attempts++;
+            if (attempts == 1)
+            {
+                throw new ExpectedException();
+            }
+
+            return GDTask.CompletedTask;
+        });
+
+        try
+        {
+            await lazy.Task;
+            throw new TestFailedException("Exception not thrown");
+        }
+        catch (ExpectedException)
+        {
+        }
+
+        await lazy.Task.AsTask().WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assertions.AssertThat(attempts).IsEqual(2);
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_LazyT_FactoryThrowOnFirstCall_RetriesAndCompletes()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        var attempts = 0;
+        var lazy = GDTask.Lazy(() =>
+        {
+            attempts++;
+            if (attempts == 1)
+            {
+                throw new ExpectedException();
+            }
+
+            return GDTask.FromResult(Constants.ReturnValue);
+        });
+
+        try
+        {
+            _ = await lazy.Task;
+            throw new TestFailedException("Exception not thrown");
+        }
+        catch (ExpectedException)
+        {
+        }
+
+        Assertions.AssertThat(await lazy.Task.AsTask().WaitAsync(TimeSpan.FromSeconds(1)))
+            .IsEqual(Constants.ReturnValue);
+        Assertions.AssertThat(attempts).IsEqual(2);
+    }
+
+    [TestCase, RequireGodotRuntime]
     public static async Task GDTask_FromCanceled()
     {
         await Constants.WaitForTaskReadyAsync();

@@ -96,7 +96,7 @@ class AsyncLazy : IAsyncLazy
         {
             if (!Volatile.Read(ref _initialized))
             {
-                var f = Interlocked.Exchange(ref _taskFactory, null);
+                var f = _taskFactory;
 
                 if (f != null)
                 {
@@ -110,6 +110,7 @@ class AsyncLazy : IAsyncLazy
                         awaiter.SourceOnCompleted(SetCompletionSource, this);
                     }
 
+                    _taskFactory = null;
                     Volatile.Write(ref _initialized, true);
                 }
             }
@@ -203,7 +204,7 @@ class AsyncLazy<T> : IAsyncLazy<T>
         {
             if (!Volatile.Read(ref _initialized))
             {
-                var f = Interlocked.Exchange(ref _taskFactory, null);
+                var f = _taskFactory;
 
                 if (f != null)
                 {
@@ -217,6 +218,7 @@ class AsyncLazy<T> : IAsyncLazy<T>
                         awaiter.SourceOnCompleted(SetCompletionSource, this);
                     }
 
+                    _taskFactory = null;
                     Volatile.Write(ref _initialized, true);
                 }
             }
