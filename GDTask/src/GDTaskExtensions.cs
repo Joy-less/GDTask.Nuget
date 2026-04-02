@@ -196,7 +196,7 @@ public static partial class GDTaskExtensions
             {
                 delayCancellationTokenSource.Cancel();
                 delayCancellationTokenSource.Dispose();
-                return (true, default);
+                throw;
             }
 
             // timeout
@@ -450,7 +450,7 @@ public static partial class GDTaskExtensions
             {
                 delayCancellationTokenSource.Cancel();
                 delayCancellationTokenSource.Dispose();
-                return true;
+                throw;
             }
 
             // timeout

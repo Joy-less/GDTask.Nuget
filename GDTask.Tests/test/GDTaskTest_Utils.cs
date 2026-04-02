@@ -205,6 +205,35 @@ public class GDTaskTest_Utils
     }
 
     [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_TimeoutWithoutException_FaultedTaskRethrows()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        try
+        {
+            await GDTask.FromException(new ExpectedException()).TimeoutWithoutException(Constants.DelayTimeSpan);
+        }
+        catch (ExpectedException)
+        {
+            return;
+        }
+
+        throw new TestFailedException("ExpectedException not thrown");
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_TimeoutWithoutException_CanceledTaskReturnsTimeoutIndicator()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        await cancellationTokenSource.CancelAsync();
+
+        var isTimeout = await GDTask.FromCanceled(cancellationTokenSource.Token).TimeoutWithoutException(Constants.DelayTimeSpan);
+
+        Assertions.AssertThat(isTimeout).IsTrue();
+    }
+
+    [TestCase, RequireGodotRuntime]
     public static async Task GDTask_TimeoutWithoutException_CustomPlayerLoop()
     {
         await Constants.WaitForTaskReadyAsync();
@@ -229,6 +258,55 @@ public class GDTaskTest_Utils
             var (isTimeout, _) = await GDTask.Never<int>(CancellationToken.None).TimeoutWithoutException(Constants.DelayTimeSpan);
             Assertions.AssertThat(isTimeout).IsTrue();
         }
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTaskT_TimeoutWithoutException_FaultedTaskRethrows()
+    {
+        await Constants.WaitForTaskReadyAsync();
+
+        try
+        {
+            await GDTask.FromException<int>(new ExpectedException()).TimeoutWithoutException(Constants.DelayTimeSpan);
+        }
+        catch (ExpectedException)
+        {
+            return;
+        }
+
+        throw new TestFailedException("ExpectedException not thrown");
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTaskT_TimeoutWithoutException_CanceledTaskReturnsTimeoutIndicator()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        await cancellationTokenSource.CancelAsync();
+
+        var (isTimeout, result) = await GDTask.FromCanceled<int>(cancellationTokenSource.Token).TimeoutWithoutException(Constants.DelayTimeSpan);
+
+        Assertions.AssertThat(isTimeout).IsTrue();
+        Assertions.AssertThat(result).IsEqual(0);
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTaskT_TimeoutWithoutException_CustomPlayerLoop()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        using var playerLoop = new ManualPlayerLoop();
+        var task = GDTask.Never<int>(CancellationToken.None)
+            .TimeoutWithoutException(TimeSpan.FromSeconds(1), DelayType.DeltaTime, playerLoop)
+            .AsTask();
+
+        playerLoop.Tick(0.4);
+        Assertions.AssertThat(task.IsCompleted).IsFalse();
+
+        playerLoop.Tick(0.7);
+
+        var (isTimeout, result) = await task;
+        Assertions.AssertThat(isTimeout).IsTrue();
+        Assertions.AssertThat(result).IsEqual(0);
     }
 
     [TestCase, RequireGodotRuntime]
