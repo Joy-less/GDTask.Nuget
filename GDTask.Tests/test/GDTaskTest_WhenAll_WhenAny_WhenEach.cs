@@ -163,4 +163,56 @@ public class GDTaskTest_WhenAll_WhenAny_WhenEach
         Assertions.AssertThat(frameCount).IsEqual(Engine.GetProcessFrames() - 15);
         Assertions.AssertThat(string.Join(", ", results)).IsEqual("1, 2, 3");
     }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenEach_EmptyEnumerable_CompletesImmediately()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        var enumerator = GDTask.WhenEach((IEnumerable<GDTask>)Array.Empty<GDTask>()).GetAsyncEnumerator();
+
+        try
+        {
+            var (isTimeout, hasItem) = await enumerator.MoveNextAsync().TimeoutWithoutException(Constants.DelayTimeSpan);
+            Assertions.AssertThat(isTimeout).IsFalse();
+            Assertions.AssertThat(hasItem).IsFalse();
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenEachT_EmptyEnumerable_CompletesImmediately()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        var enumerator = GDTask.WhenEach((IEnumerable<GDTask<int>>)Array.Empty<GDTask<int>>()).GetAsyncEnumerator();
+
+        try
+        {
+            var (isTimeout, hasItem) = await enumerator.MoveNextAsync().TimeoutWithoutException(Constants.DelayTimeSpan);
+            Assertions.AssertThat(isTimeout).IsFalse();
+            Assertions.AssertThat(hasItem).IsFalse();
+        }
+        finally
+        {
+            await enumerator.DisposeAsync();
+        }
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenEach_DisposeBeforeMoveNext_DoesNotThrow()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        var enumerator = GDTask.WhenEach((IEnumerable<GDTask>)Array.Empty<GDTask>()).GetAsyncEnumerator();
+        await enumerator.DisposeAsync();
+    }
+
+    [TestCase, RequireGodotRuntime]
+    public static async Task GDTask_WhenEachT_DisposeBeforeMoveNext_DoesNotThrow()
+    {
+        await Constants.WaitForTaskReadyAsync();
+        var enumerator = GDTask.WhenEach((IEnumerable<GDTask<int>>)Array.Empty<GDTask<int>>()).GetAsyncEnumerator();
+        await enumerator.DisposeAsync();
+    }
 }

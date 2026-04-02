@@ -47,11 +47,17 @@ sealed class WhenEachEnumerable<T>(IEnumerable<GDTask<T>> source) : IGDTaskAsync
 
             if (_state == WhenEachState.NotRunning)
             {
-                _state = WhenEachState.Running;
                 _channel = Channel.CreateSingleConsumerUnbounded<GDTask<T>>();
                 _channelEnumerator = _channel.Reader.ReadAllAsync().GetAsyncEnumerator(cancellationToken);
+                _state = WhenEachState.Running;
 
                 using var usage = EnumerableExtensions.ToSpan(source, out var span);
+                if (span.Length == 0)
+                {
+                    _state = WhenEachState.Completed;
+                    _channel.Writer.TryComplete();
+                }
+
                 foreach (var task in span) RunWhenEachTask(this, task, span.Length).Forget();
             }
 
@@ -65,7 +71,7 @@ sealed class WhenEachEnumerable<T>(IEnumerable<GDTask<T>> source) : IGDTaskAsync
             if (_state != WhenEachState.Completed)
             {
                 _state = WhenEachState.Completed;
-                _channel.Writer.TryComplete(new OperationCanceledException());
+                _channel?.Writer.TryComplete(new OperationCanceledException());
             }
         }
 
@@ -113,11 +119,17 @@ sealed class WhenEachEnumerable(IEnumerable<GDTask> source) : IGDTaskAsyncEnumer
 
             if (_state == WhenEachState.NotRunning)
             {
-                _state = WhenEachState.Running;
                 _channel = Channel.CreateSingleConsumerUnbounded<GDTask>();
                 _channelEnumerator = _channel.Reader.ReadAllAsync().GetAsyncEnumerator(cancellationToken);
+                _state = WhenEachState.Running;
 
                 using var usage = EnumerableExtensions.ToSpan(source, out var span);
+                if (span.Length == 0)
+                {
+                    _state = WhenEachState.Completed;
+                    _channel.Writer.TryComplete();
+                }
+
                 foreach (var task in span) RunWhenEachTask(this, task, span.Length).Forget();
             }
 
@@ -131,7 +143,7 @@ sealed class WhenEachEnumerable(IEnumerable<GDTask> source) : IGDTaskAsyncEnumer
             if (_state != WhenEachState.Completed)
             {
                 _state = WhenEachState.Completed;
-                _channel.Writer.TryComplete(new OperationCanceledException());
+                _channel?.Writer.TryComplete(new OperationCanceledException());
             }
         }
 
